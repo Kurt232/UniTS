@@ -1,0 +1,7 @@
+__pycache__/
+.history/
+output/
+.viscode/
+
+*.npy
+*.pth
