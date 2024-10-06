@@ -21,6 +21,7 @@ from util.misc import NativeScalerWithGradNormCount as NativeScaler
 
 from models.units import UniTSPretrainedModel
 
+num_class = 8
 class UniTSDataset(Dataset):
     def __init__(self, paths):
         data_list = []
@@ -39,6 +40,8 @@ class UniTSDataset(Dataset):
             "standing": 3,
             "walking": 4,
             "lying": 5,
+            "biking": 6,
+            "jogging": 7
         }
 
     def __len__(self):
@@ -217,7 +220,7 @@ def main(args):
     cudnn.benchmark = True
 
     # define the model
-    model = UniTSPretrainedModel(d_enc_in=6, num_class=6)
+    model = UniTSPretrainedModel(d_enc_in=6, num_class=num_class)
     load_path = args.load_path
     if load_path is not None and os.path.exists(load_path):        
         pretrained_mdl = torch.load(load_path, map_location='cpu')

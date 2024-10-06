@@ -16,16 +16,17 @@ dataset = 'fusion'
 llm_task = 'cla'
 text_embed_setting = 'bert'
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "7"
 
-base_path = '/data/wenhao/wjdu/sampling/results/UniTS_HEAD/'
+base_path = '/data/wenhao/wjdu/location/results/UniTS_HEAD/'
 eval_file_list = os.listdir(base_path)
 eval_file_list = [ base_path + x for x in eval_file_list if x.endswith('.json')]
 
 for x in eval_file_list:
     assert os.path.exists(x) == True
 
-label_list = ["climbing stairs", "sitting", "standing", "walking", "descending stairs", "lying"]
+# label_list = ["climbing stairs", "sitting", "standing", "walking", "descending stairs", "lying"]
+label_list = ["climbing stairs", "descending stairs", "sitting", "standing", "walking", "lying", "biking", "jogging"]
 num_class = len(label_list)
 device = "cuda" if torch.cuda.is_available() else "cpu"
 bert_mdl_size = 'bert-large-uncased'
@@ -131,19 +132,23 @@ for eval_file in eval_file_list:
         embed_cache = {}
 
     def get_pred(cur_pred_list, label_dict, mode='max'):
-        ["climbing stairs", "sitting", "standing", "walking", "descending stairs", "lying"]
+        ["climbing stairs", "descending stairs", "sitting", "standing", "walking", "lying", "biking", "jogging"]
         if 'climb' in cur_pred_list.lower():
             return 0
         elif 'sit' in cur_pred_list.lower() or 'itting' in cur_pred_list.lower():
-            return 1
-        elif 'stand' in cur_pred_list.lower():
             return 2
-        elif 'walk' in cur_pred_list.lower():
+        elif 'stand' in cur_pred_list.lower():
             return 3
-        elif 'descend' in cur_pred_list.lower():
+        elif 'walk' in cur_pred_list.lower():
             return 4
+        elif 'descend' in cur_pred_list.lower():
+            return 1
         elif 'ly' in cur_pred_list.lower() or 'lie' in cur_pred_list.lower():
             return 5
+        elif 'bik' in cur_pred_list.lower():
+            return 6
+        elif 'jog' in cur_pred_list.lower():
+            return 7
             
         # at beginning, all zero scores
         score = np.zeros(num_class)
