@@ -38,9 +38,7 @@ class UniTSDataset(Dataset):
             "sitting": 2,
             "standing": 3,
             "walking": 4,
-            "biking": 5,
-            "jogging": 6,
-            "lying": 7,
+            "lying": 5,
         }
 
     def __len__(self):
@@ -219,7 +217,7 @@ def main(args):
     cudnn.benchmark = True
 
     # define the model
-    model = UniTSPretrainedModel(d_enc_in=6, num_class=8)
+    model = UniTSPretrainedModel(d_enc_in=6, num_class=6)
     load_path = args.load_path
     if load_path is not None and os.path.exists(load_path):        
         pretrained_mdl = torch.load(load_path, map_location='cpu')

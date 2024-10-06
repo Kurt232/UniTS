@@ -18,14 +18,14 @@ text_embed_setting = 'bert'
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
-base_path = '/data/wenhao/wjdu/adapterv2/benchmark/UniTS_HEAD/label_results/'
+base_path = '/data/wenhao/wjdu/sampling/results/UniTS_HEAD/'
 eval_file_list = os.listdir(base_path)
 eval_file_list = [ base_path + x for x in eval_file_list if x.endswith('.json')]
 
 for x in eval_file_list:
     assert os.path.exists(x) == True
 
-label_list = ["climbing stairs", "sitting", "biking", "standing", "walking", "descending stairs", "jogging", "lying"]
+label_list = ["climbing stairs", "sitting", "standing", "walking", "descending stairs", "lying"]
 num_class = len(label_list)
 device = "cuda" if torch.cuda.is_available() else "cpu"
 bert_mdl_size = 'bert-large-uncased'
@@ -131,22 +131,19 @@ for eval_file in eval_file_list:
         embed_cache = {}
 
     def get_pred(cur_pred_list, label_dict, mode='max'):
+        ["climbing stairs", "sitting", "standing", "walking", "descending stairs", "lying"]
         if 'climb' in cur_pred_list.lower():
             return 0
-        elif 'descend' in cur_pred_list.lower():
-            return 5
         elif 'sit' in cur_pred_list.lower() or 'itting' in cur_pred_list.lower():
             return 1
         elif 'stand' in cur_pred_list.lower():
-            return 3
-        elif 'bik' in cur_pred_list.lower():
             return 2
         elif 'walk' in cur_pred_list.lower():
+            return 3
+        elif 'descend' in cur_pred_list.lower():
             return 4
-        elif 'jog' in cur_pred_list.lower():
-            return 6
         elif 'ly' in cur_pred_list.lower() or 'lie' in cur_pred_list.lower():
-            return 7
+            return 5
             
         # at beginning, all zero scores
         score = np.zeros(num_class)

@@ -8,18 +8,18 @@ import torch
 
 from models.units import UniTSPretrainedModel
 
-load_path = '/data/wenhao/wjdu/adapterv2/benchmark/UniTS_HEAD/checkpoint-39.pth'
-save_path = '/data/wenhao/wjdu/adapterv2/benchmark/UniTS_HEAD/results/'
+load_path = '/data/wenhao/wjdu/sampling/output/UniTS_HEAD/20hz50/checkpoint-39.pth'
+save_path = '/data/wenhao/wjdu/sampling/results/UniTS_HEAD'
 
 device = 'cuda'
-test_paths = ['/data/wenhao/wjdu/fusion_norm/benchmark/test_pure_cla_hhar_common.json', '/data/wenhao/wjdu/fusion_norm/benchmark/test_pure_cla_hhar_uncommon.json', '/data/wenhao/wjdu/fusion_norm/benchmark/test_pure_cla_motion_common.json', '/data/wenhao/wjdu/fusion_norm/benchmark/test_pure_cla_motion_uncommon.json', '/data/wenhao/wjdu/fusion_norm/benchmark/test_pure_cla_shoaib_common.json', '/data/wenhao/wjdu/fusion_norm/benchmark/test_pure_cla_shoaib_uncommon.json', '/data/wenhao/wjdu/fusion_norm/benchmark/test_pure_cla_uci_common.json', '/data/wenhao/wjdu/fusion_norm/benchmark/test_pure_cla_uci_uncommon.json']
+test_paths = ['/data/wenhao/wjdu/sampling/data/test_pure_cla_20hz50.json', '/data/wenhao/wjdu/sampling/data/test_pure_cla_50hz125.json', '/data/wenhao/wjdu/sampling/data/test_pure_cla_100hz250.json']
 
 os.makedirs(save_path, exist_ok=True)
 
 def main():
 
     # define the model
-    model = UniTSPretrainedModel(d_enc_in=6, num_class=8)
+    model = UniTSPretrainedModel(d_enc_in=6, num_class=6)
     if load_path is not None and os.path.exists(load_path):        
         pretrained_mdl = torch.load(load_path, map_location='cpu')
         msg = model.load_state_dict(pretrained_mdl['model'], strict=False)
@@ -41,9 +41,7 @@ def main():
             "sitting": 2,
             "standing": 3,
             "walking": 4,
-            "biking": 5,
-            "jogging": 6,
-            "lying": 7,
+            "lying": 5,
         }
 
     _mapping = {v: k for k, v in mapping.items()}
@@ -69,7 +67,7 @@ def main():
 
                 predictions.append({'pred': _mapping[pred_index.item()], 'ref': data['output'], 'data_id': data['data_id']})
 
-        result_file = data_path.split('/')[-1]
+        result_file = load_path.split('/')[-2] + '_' + data_path.split('/')[-1]
         prediction_file = os.path.join(save_path, result_file)
         json.dump(predictions, open(prediction_file, 'w'), indent=2)
 
