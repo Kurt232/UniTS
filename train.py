@@ -32,16 +32,16 @@ class UniTSDataset(Dataset):
 
         self.data_list = data_list
         print(f"total length: {len(self)}")
-
+        ["climbing stairs", "sitting", "biking", "standing", "walking", "descending stairs", "jogging", "lying"]
         self.mapping = {
             "climbing stairs": 0,
-            "descending stairs": 1,
-            "sitting": 2,
+            "sitting": 1,
+            "biking": 2,
             "standing": 3,
             "walking": 4,
-            "lying": 5,
-            "biking": 6,
-            "jogging": 7
+            "descending stairs": 5,
+            "jogging": 6,
+            "lying": 7
         }
 
     def __len__(self):
@@ -231,12 +231,12 @@ def main(args):
     model_without_ddp = model
     # set trainable parameters
 
-    for name, para in model.named_parameters():
-        if 'cls_head' in name:
-            para.data = para.data.float()
-            para.requires_grad = True
-        else:
-            para.requires_grad = False
+    # for name, para in model.named_parameters():
+    #     if 'cls_head' in name:
+    #         para.data = para.data.float()
+    #         para.requires_grad = True
+    #     else:
+    #         para.requires_grad = False
 
     print("Trainable Params:")
     print([(key, val.shape) for key, val in model.named_parameters() if val.requires_grad])

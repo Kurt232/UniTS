@@ -8,13 +8,28 @@ import torch
 
 from models.units import UniTSPretrainedModel
 
-load_path = '/data/wenhao/wjdu/location/output/UniTS_HEAD/ankle/checkpoint-39.pth'
-save_path = '/data/wenhao/wjdu/location/results/UniTS_HEAD'
+# load_path = '/data/wenhao/wjdu/benchmark/output/UniTS_HEAD_H/checkpoint-99.pth'
+# save_path = '/data/wenhao/wjdu/benchmark/results/UniTS_HEAD_H'
 
-num_class = 8
+# labels = ['biking', 'climbing stairs', 'descending stairs', 'jogging', 'lying', 'sitting', 'standing', 'walking', 'car driving', 'computer work', 'elevator down', 'elevator up', 'folding laundry', 'house cleaning', 'ironing', 'jumping', 'nordic walking', 'playing soccer', 'vacuum cleaning', 'walking left', 'walking right', 'watching TV']
+# labels = ['biking', 'climbing stairs', 'descending stairs', 'jogging', 'lying', 'sitting', 'standing', 'walking']
+# num_class = len(labels)
 
 device = 'cuda'
-test_paths = ['/data/wenhao/wjdu/location/data/test_pure_cla_hand.json', '/data/wenhao/wjdu/location/data/test_pure_cla_chest.json', '/data/wenhao/wjdu/location/data/test_pure_cla_ankle.json']
+# test_paths = ['/data/wenhao/wjdu/benchmark/data/test_pure_cla.json']
+# test_paths = [
+#     "/data/wenhao/wjdu/fusion_norm/imu/test_pure_cla_hhar.json",
+#     "/data/wenhao/wjdu/fusion_norm/imu/test_pure_cla_motion.json",
+#     "/data/wenhao/wjdu/fusion_norm/imu/test_pure_cla_shoaib.json",
+#     "/data/wenhao/wjdu/fusion_norm/imu/test_pure_cla_uci.json"
+# ]
+
+load_path = '/data/wenhao/wjdu/adapterv2/benchmark1/UniTS_HEAD/checkpoint-99.pth'
+save_path = '/data/wenhao/wjdu/adapterv2/benchmark1/UniTS_HEAD/heter'
+
+num_class = 8
+# test_paths = ['/data/wenhao/wjdu/fusion_norm/benchmark/test_pure_cla_hhar_common.json', '/data/wenhao/wjdu/fusion_norm/benchmark/test_pure_cla_hhar_uncommon.json', '/data/wenhao/wjdu/fusion_norm/benchmark/test_pure_cla_motion_common.json', '/data/wenhao/wjdu/fusion_norm/benchmark/test_pure_cla_motion_uncommon.json', '/data/wenhao/wjdu/fusion_norm/benchmark/test_pure_cla_shoaib_common.json', '/data/wenhao/wjdu/fusion_norm/benchmark/test_pure_cla_shoaib_uncommon.json', '/data/wenhao/wjdu/fusion_norm/benchmark/test_pure_cla_uci_common.json', '/data/wenhao/wjdu/fusion_norm/benchmark/test_pure_cla_uci_uncommon.json']
+test_paths = "/data/wenhao/wjdu/fusion_norm/win/test_pure_cla_motion_60_common.json /data/wenhao/wjdu/fusion_norm/win/test_pure_cla_motion_80_common.json /data/wenhao/wjdu/fusion_norm/freq/test_pure_cla_motion_10_common.json /data/wenhao/wjdu/fusion_norm/freq/test_pure_cla_motion_40_common.json /data/wenhao/wjdu/fusion_norm/chan/test_pure_cla_motion_accel_common.json /data/wenhao/wjdu/fusion_norm/chan/test_pure_cla_motion_gyro_common.json".split()
 
 os.makedirs(save_path, exist_ok=True)
 
@@ -37,15 +52,16 @@ def main():
         meta_l = json.load(open(meta_path))
         data_list.append(meta_l)
     
+    # mapping = {l: i for i, l in enumerate(labels)}
     mapping = {
             "climbing stairs": 0,
-            "descending stairs": 1,
-            "sitting": 2,
+            "sitting": 1,
+            "biking": 2,
             "standing": 3,
             "walking": 4,
-            "lying": 5,
-            "biking": 6,
-            "jogging": 7
+            "descending stairs": 5,
+            "jogging": 6,
+            "lying": 7
         }
 
     _mapping = {v: k for k, v in mapping.items()}
@@ -70,6 +86,7 @@ def main():
                     correct_pred += 1
 
                 predictions.append({'pred': _mapping[pred_index.item()], 'ref': data['output'], 'data_id': data['data_id']})
+                # predictions.append({'pred': _mapping[pred_index.item()], 'ref': data['output'], 'data_id': data['data_id'], 'ds': data['ds'], 'loc': data['loc'], 'freq': data['freq'], 'duration': data['duration'], 'is_seen': data['is_seen']})
 
         result_file = load_path.split('/')[-2] + '_' + data_path.split('/')[-1]
         prediction_file = os.path.join(save_path, result_file)

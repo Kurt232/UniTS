@@ -16,17 +16,24 @@ dataset = 'fusion'
 llm_task = 'cla'
 text_embed_setting = 'bert'
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "7"
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
-base_path = '/data/wenhao/wjdu/location/results/UniTS_HEAD/'
-eval_file_list = os.listdir(base_path)
-eval_file_list = [ base_path + x for x in eval_file_list if x.endswith('.json')]
+base_path = '/data/wenhao/wjdu/benchmark/results/UniTS_HEAD/'
+# eval_file_list = os.listdir(base_path)
+# eval_file_list = [ base_path + x for x in eval_file_list if x.endswith('.json')]
+is_benchmark = False
+if is_benchmark:
+    eval_file_list = [ base_path + d for d in os.listdir(base_path) if d.endswith('_cla.json')]
+    label_list = ['biking', 'climbing stairs', 'descending stairs', 'jogging', 'lying', 'sitting', 'standing', 'walking', 'car driving', 'computer work', 'elevator down', 'elevator up', 'folding laundry', 'house cleaning', 'ironing', 'jumping', 'nordic walking', 'playing soccer', 'vacuum cleaning', 'walking left', 'walking right', 'watching TV']
+    pred_list = ['bik', 'climb', 'descend', 'jog', 'ly', 'sit', 'stand', 'walk', 'car', 'computer', 'down', 'up', 'fold', 'clean', 'iron', 'jump', 'nordic', 'soccer', 'vacuum', 'left', 'right', 'watch']
+else:
+    eval_file_list = [ base_path + d for d in os.listdir(base_path) if d.endswith('.json') and not d.endswith('_cla.json')]
+    label_list = ['biking', 'climbing stairs', 'descending stairs', 'jogging', 'lying', 'sitting', 'standing', 'walking']
+    pred_list = ['bik', 'climb', 'descend', 'jog', 'ly', 'sit', 'stand', 'walk']
 
 for x in eval_file_list:
     assert os.path.exists(x) == True
 
-# label_list = ["climbing stairs", "sitting", "standing", "walking", "descending stairs", "lying"]
-label_list = ["climbing stairs", "descending stairs", "sitting", "standing", "walking", "lying", "biking", "jogging"]
 num_class = len(label_list)
 device = "cuda" if torch.cuda.is_available() else "cpu"
 bert_mdl_size = 'bert-large-uncased'
@@ -132,23 +139,9 @@ for eval_file in eval_file_list:
         embed_cache = {}
 
     def get_pred(cur_pred_list, label_dict, mode='max'):
-        ["climbing stairs", "descending stairs", "sitting", "standing", "walking", "lying", "biking", "jogging"]
-        if 'climb' in cur_pred_list.lower():
-            return 0
-        elif 'sit' in cur_pred_list.lower() or 'itting' in cur_pred_list.lower():
-            return 2
-        elif 'stand' in cur_pred_list.lower():
-            return 3
-        elif 'walk' in cur_pred_list.lower():
-            return 4
-        elif 'descend' in cur_pred_list.lower():
-            return 1
-        elif 'ly' in cur_pred_list.lower() or 'lie' in cur_pred_list.lower():
-            return 5
-        elif 'bik' in cur_pred_list.lower():
-            return 6
-        elif 'jog' in cur_pred_list.lower():
-            return 7
+        for i, p in enumerate(pred_list):
+            if p in cur_pred_list:
+                return i
             
         # at beginning, all zero scores
         score = np.zeros(num_class)
