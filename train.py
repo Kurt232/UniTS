@@ -21,7 +21,7 @@ from util.misc import NativeScalerWithGradNormCount as NativeScaler
 
 from models.units import UniTSPretrainedModel
 
-num_class = 8
+num_class = 7
 class UniTSDataset(Dataset):
     def __init__(self, paths):
         data_list = []
@@ -32,16 +32,15 @@ class UniTSDataset(Dataset):
 
         self.data_list = data_list
         print(f"total length: {len(self)}")
-        ["climbing stairs", "sitting", "biking", "standing", "walking", "descending stairs", "jogging", "lying"]
+        ['downstairs', 'jog', 'lie', 'sit', 'stand', 'upstairs', 'walk']
         self.mapping = {
-            "climbing stairs": 0,
-            "sitting": 1,
-            "biking": 2,
-            "standing": 3,
-            "walking": 4,
-            "descending stairs": 5,
-            "jogging": 6,
-            "lying": 7
+            'downstairs': 0,
+            'jog': 1,
+            'lie': 2,
+            'sit': 3,
+            'stand': 4,
+            'upstairs': 5,
+            'walk': 6
         }
 
     def __len__(self):
