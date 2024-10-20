@@ -10,11 +10,11 @@ from models.units import UniTSPretrainedModel
 
 device = 'cuda'
 
-load_path = '/data/wenhao/wjdu/realworld_thigh/UniTS_HEAD_1/checkpoint-99.pth'
+load_path = '/data/wenhao/wjdu/realworld_thigh/UniTS_HEAD_8_4s/checkpoint-99.pth'
 save_path = '/data/wenhao/wjdu/realworld_thigh/results/'
 
 num_class = 7
-test_paths = ["/data/wenhao/wjdu/data/realworld_thigh_2s/test_thigh_1.json"]
+test_paths = ["/data/wenhao/wjdu/data/realworld_thigh_4s/test_thigh_1.json"]
 
 os.makedirs(save_path, exist_ok=True)
 
