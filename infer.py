@@ -6,21 +6,30 @@ import yaml
 from tqdm import tqdm
 import torch
 
-from models.units import UniTSPretrainedModel
+from models.tst import TestModel, ModelArgs
 
 device = 'cuda'
 
-load_path = '/data/wenhao/wjdu/realworld_thigh/UniTS_HEAD_8_4s/checkpoint-99.pth'
-save_path = '/data/wenhao/wjdu/realworld_thigh/results/'
+load_path = '/data/wjdu/TST_HEAD/checkpoint-199.pth'
+save_path = '/data/wjdu/test/'
 
 num_class = 7
-test_paths = ["/data/wenhao/wjdu/data/realworld_thigh_4s/test_thigh_1.json"]
+test_paths = ["/data/wjdu/data4/realworld1/realworld_10_thigh_TEST.json"]
 
 os.makedirs(save_path, exist_ok=True)
 
+def data_preprocess(imu_data):
+    imu_input = torch.tensor(imu_data, dtype=torch.float32)
+    assert imu_input.shape == (6, 200), f"imu_input shape: {imu_input.shape}"
+    imu_input = torch.stack((imu_input[0:3, :], imu_input[3:6, :]))
+    assert imu_input.shape == (2, 3, 200), f"imu_input shape: {imu_input.shape}"
+
+    return imu_input
+
 def main():
     # define the model
-    model = UniTSPretrainedModel(d_enc_in=6, num_class=num_class)
+    model_args = ModelArgs()
+    model = TestModel(model_args, num_class)
     if load_path is not None and os.path.exists(load_path):        
         pretrained_mdl = torch.load(load_path, map_location='cpu')
         msg = model.load_state_dict(pretrained_mdl['model'], strict=False)
@@ -57,11 +66,10 @@ def main():
         
         with torch.no_grad():
             for data in tqdm(data_item, desc=f"Testing ..."):
-                imu_input = torch.tensor(data['imu_input'], dtype=torch.float32)
+                imu_input = data_preprocess(data['imu_input'])
                 label = mapping[data['output']]
 
                 imu_input = imu_input.unsqueeze(0).to(device, non_blocking=True)
-                    
                 output = model(imu_input) # [1, 5]
 
                 # Calculate accuracy

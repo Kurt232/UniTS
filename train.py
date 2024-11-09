@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Iterable
 
 import torch
+import torch.nn as nn
 import torch.backends.cudnn as cudnn
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import Dataset
@@ -19,11 +20,12 @@ import util.misc as misc
 import util.lr_sched as lr_sched
 from util.misc import NativeScalerWithGradNormCount as NativeScaler
 
-from models.units import UniTSPretrainedModel
+from models.tst import TestModel, ModelArgs
 
 num_class = 7
-class UniTSDataset(Dataset):
+class TSTDataset(Dataset):
     def __init__(self, paths):
+
         data_list = []
         for meta_path in paths:
             meta_l = json.load(open(meta_path))
@@ -50,12 +52,12 @@ class UniTSDataset(Dataset):
         sample = self.data_list[index]
         imu_data, caption = sample['imu_input'], sample['output']
         imu_input = torch.tensor(imu_data, dtype=torch.float32)
-        
+        assert imu_input.shape == (6, 200), f"imu_input shape: {imu_input.shape}"
         label = torch.tensor([self.mapping[caption]], dtype=torch.int8)
 
         return label, imu_input
 
-def train_one_epoch(model: UniTSPretrainedModel,
+def train_one_epoch(model: nn.Module,
                     data_loader: Iterable, optimizer: torch.optim.Optimizer,
                     device: torch.device, epoch: int, loss_scaler,
                     log_writer=None,
@@ -65,11 +67,12 @@ def train_one_epoch(model: UniTSPretrainedModel,
 
     metric_logger = misc.MetricLogger(delimiter="  ")
     metric_logger.add_meter('lr', misc.SmoothedValue(window_size=1, fmt='{value:.6f}'))
-    metric_logger.add_meter('correct', misc.SmoothedValue(window_size=1, fmt='{value:.0f}'))
-    metric_logger.add_meter('total', misc.SmoothedValue(window_size=1, fmt='{value:.0f}'))
 
     header = 'Epoch: [{}]'.format(epoch)
     print_freq = 10
+
+    correct = 0
+    total = 0
 
     accum_iter = args.accum_iter
 
@@ -91,11 +94,9 @@ def train_one_epoch(model: UniTSPretrainedModel,
         # Calculate accuracy
         _, preds = torch.max(output, 1) # output: [B, 8]
         label_indices = label.view(-1) # label: [B, 1]
-        correct = (preds == label_indices).sum().item()
-        batch_size = label.size(0)
+        correct += (preds == label_indices).sum().item()
+        total += label.size(0)
         
-        metric_logger.update(correct=correct)
-        metric_logger.update(total=batch_size)
 
         # Loss
         loss = c_loss
@@ -134,18 +135,14 @@ def train_one_epoch(model: UniTSPretrainedModel,
             log_writer.add_scalar('lr', lr, epoch_1000x)
 
 
-    # gather the stats from all processes
+    # Compute accuracy
+    accuracy = 100. * correct / total
+    metric_logger.meters['acc'].update(accuracy)
+
+    # Gather the stats from all processes
     metric_logger.synchronize_between_processes()
-    # print("Averaged stats:", metric_logger)
-    ret = {}
-    for k, meter in metric_logger.meters.items():
-        if k in ['correct', 'total']:
-            ret[k] = meter.total
-        else:
-            ret[k] = meter.global_avg
-    
-    ret['acc'] = ret['correct'] / ret['total']
-    return ret
+    print(f"Averaged stats for Train:", metric_logger)
+    return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
 
 def get_args_parser():
     parser = argparse.ArgumentParser('UniTS training', add_help=False)
@@ -158,6 +155,8 @@ def get_args_parser():
     # Model parameters
     parser.add_argument('--load_path', default=None, type=str,
                         help='path to load pretrained model')
+    parser.add_argument('--model_config', default=None, type=str,
+                        help='path to model config file')
     # Optimizer parameters
     parser.add_argument('--weight_decay', type=float, default=0.05,
                         help='weight decay (default: 0.05)')
@@ -173,7 +172,7 @@ def get_args_parser():
                         help='epochs to warmup LR')
 
     # Dataset parameters
-    parser.add_argument('--data_config', default='configs/data/pretrain/EN.yaml', type=str,
+    parser.add_argument('--data_config', nargs='+', default=None,
                         help='dataset config path')
     parser.add_argument('--num_workers', default=10, type=int)
     parser.add_argument('--pin_mem', action='store_true',
@@ -203,6 +202,43 @@ def get_args_parser():
 
     return parser
 
+def evaluate(model, data_loader, device, epoch, args=None, is_test=False):
+    model.eval()
+    metric_logger = misc.MetricLogger(delimiter="  ")
+    header = f'Epoch: [{epoch}] {"Test" if is_test else "Validation"}:'
+    criterion = torch.nn.CrossEntropyLoss()
+
+    correct = 0
+    total = 0
+
+    with torch.no_grad():
+        for batch in metric_logger.log_every(data_loader, 10, header):
+            targets, images = batch
+            images = images.to(device, non_blocking=True)
+            targets = targets.to(device, non_blocking=True)
+
+            # Compute output
+            outputs = model(images)
+            loss = criterion(outputs, targets.long().squeeze(-1))
+
+            # Measure accuracy
+            _, preds = torch.max(outputs, 1) # output: [B, 8]
+            label_indices = targets.view(-1) # label: [B, 1]
+            correct += (preds == label_indices).sum().item()
+            total += targets.size(0)
+
+            # Update metrics
+            metric_logger.update(loss=loss.item())
+
+    # Compute accuracy
+    accuracy = 100. * correct / total
+    metric_logger.meters['acc'].update(accuracy)
+
+    # Gather the stats from all processes
+    metric_logger.synchronize_between_processes()
+    print(f"Averaged stats for {'Test' if is_test else 'Validation'}:", metric_logger)
+    return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
+
 def main(args):
     misc.init_distributed_mode(args)
     # args.distributed = False # debug
@@ -212,42 +248,47 @@ def main(args):
 
     device = torch.device(args.device)
 
-    # fix the seed for reproducibility
-    seed = args.seed + misc.get_rank()
+    # Fix the seed for reproducibility
+    # seed = args.seed + misc.get_rank()
+    seed = args.seed
     torch.manual_seed(seed)
     np.random.seed(seed)
     cudnn.benchmark = True
 
-    # define the model
-    model = UniTSPretrainedModel(d_enc_in=6, num_class=num_class)
-    load_path = args.load_path
-    if load_path is not None and os.path.exists(load_path):        
-        pretrained_mdl = torch.load(load_path, map_location='cpu')
-        msg = model.load_state_dict(pretrained_mdl, strict=False)
-        print(msg)
+    if args.model_config is not None:
+        model_args = ModelArgs()
+    else:
+        model_args = ModelArgs.from_json(args.model_config)
 
-    model.to(device) # device is cuda
+    args.output_dir = os.path.join(args.output_dir, os.path.basename(args.model_config).split('.')[0])
+    if not os.path.exists(args.output_dir):
+        os.makedirs(args.output_dir)
+    log_args = {
+        'time': datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S"),
+        'model_args': model_args.__dict__,
+        'train_args': vars(args),
+    }
+
+    # Define the model
+    model = TestModel(model_args, num_class)
+
+    model.to(device)  # device is cuda
     model_without_ddp = model
-    # set trainable parameters
 
-    # for name, para in model.named_parameters():
-    #     if 'cls_head' in name:
-    #         para.data = para.data.float()
-    #         para.requires_grad = True
-    #     else:
-    #         para.requires_grad = False
-
+    # Set trainable parameters
     print("Trainable Params:")
     print([(key, val.shape) for key, val in model.named_parameters() if val.requires_grad])
 
     if args.distributed:
-        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu], find_unused_parameters=True)
+        model = torch.nn.parallel.DistributedDataParallel(
+            model, device_ids=[args.gpu], find_unused_parameters=True
+        )
         model_without_ddp = model.module
-    
-    # training detail
+
+    # Training details
     eff_batch_size = args.batch_size * args.accum_iter * misc.get_world_size()
 
-    if args.lr is None:  # only base_lr is specified
+    if args.lr is None:  # Only base_lr is specified
         args.lr = args.blr * eff_batch_size / 256
 
     print("base lr: %.2e" % (args.lr * 256 / eff_batch_size))
@@ -256,25 +297,50 @@ def main(args):
     print("accumulate grad iterations: %d" % args.accum_iter)
     print("effective batch size: %d" % eff_batch_size)
 
-    # following timm: set wd as 0 for bias and norm layers
+    # Set weight decay as 0 for bias and norm layers
     param_groups = misc.add_weight_decay(model_without_ddp, args.weight_decay)
     optimizer = torch.optim.AdamW(param_groups, lr=args.lr, betas=(0.9, 0.95))
     print(optimizer)
     loss_scaler = NativeScaler()
 
-    dataset_train = UniTSDataset([args.data_config])
-    print(dataset_train)
+    # Create the train dataset
+    dataset_train = TSTDataset([args.data_config[0]])
+    print(f"train dataset size: {len(dataset_train)}")
+    dataset_test = TSTDataset([args.data_config[1]])
+
+    # Split the dataset into training, validation, and test sets (90% train, 10% val)
+    train_size = len(dataset_train)
+    val_size = int(train_size * 0.1)
+    train_size -= val_size
+
+    # Ensure reproducibility across different processes
+    generator = torch.Generator()
+    generator.manual_seed(seed)
+
+    # Split the dataset
+    dataset_train, dataset_val = torch.utils.data.random_split(
+        dataset_train, [train_size, val_size], generator=generator
+    )
+
     num_tasks = misc.get_world_size()
     global_rank = misc.get_rank()
-    # sampler_train = misc.DistributedSubEpochSampler(
-    #     dataset_train, num_replicas=num_tasks, rank=global_rank, split_epoch=args.split_epoch, shuffle=True
-    # )
-    # my pretrain dataset scale is 25k, thus I don't need to split the epoch
+
+    # Create samplers for distributed training
     sampler_train = torch.utils.data.DistributedSampler(
         dataset_train, num_replicas=num_tasks, rank=global_rank, shuffle=True
     )
-    print("Sampler_train = %s" % str(sampler_train))
+    sampler_val = torch.utils.data.DistributedSampler(
+        dataset_val, num_replicas=num_tasks, rank=global_rank, shuffle=False
+    )
+    sampler_test = torch.utils.data.DistributedSampler(
+        dataset_test, num_replicas=num_tasks, rank=global_rank, shuffle=False
+    )
 
+    print("Sampler_train = %s" % str(sampler_train))
+    print("Sampler_val = %s" % str(sampler_val))
+    print("Sampler_test = %s" % str(sampler_test))
+
+    # Create data loaders
     data_loader_train = torch.utils.data.DataLoader(
         dataset_train, sampler=sampler_train,
         batch_size=args.batch_size,
@@ -283,20 +349,35 @@ def main(args):
         drop_last=True,
     )
 
-    # SummaryWrite
+    data_loader_val = torch.utils.data.DataLoader(
+        dataset_val, sampler=sampler_val,
+        batch_size=args.batch_size,
+        num_workers=args.num_workers,
+        pin_memory=args.pin_mem,
+        drop_last=False,
+    )
+
+    data_loader_test = torch.utils.data.DataLoader(
+        dataset_test, sampler=sampler_test,
+        batch_size=args.batch_size,
+        num_workers=args.num_workers,
+        pin_memory=args.pin_mem,
+        drop_last=False,
+    )
+
+    # SummaryWriter
     if global_rank == 0 and args.log_dir is not None:
         os.makedirs(args.log_dir, exist_ok=True)
         log_writer = SummaryWriter(log_dir=args.log_dir)
     else:
         log_writer = None
 
-
     print(f"Start training for {args.epochs} epochs")
-    total_correct = 0
-    total_count = 0
     start_time = time.time()
     for epoch in range(args.start_epoch, args.epochs):
         data_loader_train.sampler.set_epoch(epoch)
+        data_loader_val.sampler.set_epoch(epoch)
+        data_loader_test.sampler.set_epoch(epoch)
 
         train_stats = train_one_epoch(
             model, data_loader_train,
@@ -305,20 +386,39 @@ def main(args):
             args=args
         )
 
+        # Evaluate on the validation set
+        val_stats = evaluate(
+            model, data_loader_val,
+            device, epoch, args=args
+        )
+
+        # Evaluate on the test set
+        test_stats = evaluate(
+            model, data_loader_test,
+            device, epoch, args=args, is_test=True
+        )
+
         if args.output_dir and (epoch % 5 == 0 or epoch + 1 == args.epochs):
             misc.save_model(
                 args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
-                loss_scaler=loss_scaler, epoch=epoch)
-        
-        log_stats = {**{f'train_{k}': v for k, v in train_stats.items()},
-                     'epoch': epoch}
+                loss_scaler=loss_scaler, epoch=epoch
+            )
+
+        log_stats = {
+            **{f'train_{k}': v for k, v in train_stats.items()},
+            **{f'val_{k}': v for k, v in val_stats.items()},
+            **{f'test_{k}': v for k, v in test_stats.items()},
+            'epoch': epoch
+        }
 
         print(log_stats)
         if args.output_dir and misc.is_main_process():
             if log_writer is not None:
                 log_writer.flush()
-            with open(os.path.join(args.output_dir, "log.txt"), mode="a", encoding="utf-8") as f:
+            with open(os.path.join(args.output_dir, "log.txt"), mode="w", encoding="utf-8") as f:
                 f.write(json.dumps(log_stats) + "\n")
+            with open(os.path.join(args.output_dir, "args.json"), mode="w", encoding="utf-8") as f:
+                f.write(json.dumps(log_args) + "\n")
 
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
