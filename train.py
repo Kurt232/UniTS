@@ -255,19 +255,18 @@ def main(args):
     np.random.seed(seed)
     cudnn.benchmark = True
 
-    if args.model_config is not None:
+    if args.model_config is None:
         model_args = ModelArgs()
     else:
         model_args = ModelArgs.from_json(args.model_config)
 
-    args.output_dir = os.path.join(args.output_dir, os.path.basename(args.model_config).split('.')[0])
-    if not os.path.exists(args.output_dir):
-        os.makedirs(args.output_dir)
     log_args = {
         'time': datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S"),
         'model_args': model_args.__dict__,
         'train_args': vars(args),
     }
+    with open(os.path.join(args.output_dir, "args.json"), mode="w", encoding="utf-8") as f:
+        f.write(json.dumps(log_args, indent=4) + "\n")
 
     # Define the model
     model = TestModel(model_args, num_class)
@@ -372,6 +371,11 @@ def main(args):
     else:
         log_writer = None
 
+    best_epoch = 0
+    best_vali_acc = 0.0
+    best_epoch_test_acc = 0.0
+    span = 10
+
     print(f"Start training for {args.epochs} epochs")
     start_time = time.time()
     for epoch in range(args.start_epoch, args.epochs):
@@ -398,7 +402,18 @@ def main(args):
             device, epoch, args=args, is_test=True
         )
 
-        if args.output_dir and (epoch % 5 == 0 or epoch + 1 == args.epochs):
+        if args.output_dir and (epoch % span == 0 or epoch + 1 == args.epochs):
+            misc.save_model(
+                args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
+                loss_scaler=loss_scaler, epoch=epoch
+            )
+        
+        if args.output_dir and best_vali_acc < val_stats['acc'] and epoch > span:
+            best_vali_acc = val_stats['acc']
+            best_epoch = epoch
+            best_epoch_test_acc = test_stats['acc']
+            if epoch % span == 0 or epoch + 1 == args.epochs:
+                continue
             misc.save_model(
                 args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
                 loss_scaler=loss_scaler, epoch=epoch
@@ -415,14 +430,16 @@ def main(args):
         if args.output_dir and misc.is_main_process():
             if log_writer is not None:
                 log_writer.flush()
-            with open(os.path.join(args.output_dir, "log.txt"), mode="w", encoding="utf-8") as f:
+            with open(os.path.join(args.output_dir, "log.txt"), mode="a", encoding="utf-8") as f:
                 f.write(json.dumps(log_stats) + "\n")
-            with open(os.path.join(args.output_dir, "args.json"), mode="w", encoding="utf-8") as f:
-                f.write(json.dumps(log_args) + "\n")
 
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
     print('Training time {}'.format(total_time_str))
+    
+    with open(os.path.join(args.output_dir, "best.json"), mode="a", encoding="utf-8") as f:
+        f.write(json.dumps({"best_epoch": best_epoch, "vali_acc": best_vali_acc, "test_acc": best_epoch_test_acc}, indent=4) + "\n")
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser('UniTS training', parents=[get_args_parser()])

@@ -1,227 +1,137 @@
-# evaluation classification based on gpt/bert embeddings
 import os
-
 import numpy as np
-import math
 import json
-import string
 import torch
-import numpy as np
 from collections import OrderedDict
 from transformers import AutoTokenizer, BertModel
-from sklearn.metrics import accuracy_score, classification_report
-from util.stats import calculate_stats
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+import matplotlib.pyplot as plt
 
-dataset = 'fusion'
-llm_task = 'cla'
-text_embed_setting = 'bert'
+# os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
-
-base_path = '/data/wenhao/wjdu/benchmark/results/UniTS_HEAD/'
-# eval_file_list = os.listdir(base_path)
-# eval_file_list = [ base_path + x for x in eval_file_list if x.endswith('.json')]
-is_benchmark = False
-if is_benchmark:
-    eval_file_list = [ base_path + d for d in os.listdir(base_path) if d.endswith('_cla.json')]
-    label_list = ['biking', 'climbing stairs', 'descending stairs', 'jogging', 'lying', 'sitting', 'standing', 'walking', 'car driving', 'computer work', 'elevator down', 'elevator up', 'folding laundry', 'house cleaning', 'ironing', 'jumping', 'nordic walking', 'playing soccer', 'vacuum cleaning', 'walking left', 'walking right', 'watching TV']
-    pred_list = ['bik', 'climb', 'descend', 'jog', 'ly', 'sit', 'stand', 'walk', 'car', 'computer', 'down', 'up', 'fold', 'clean', 'iron', 'jump', 'nordic', 'soccer', 'vacuum', 'left', 'right', 'watch']
-else:
-    eval_file_list = [ base_path + d for d in os.listdir(base_path) if d.endswith('.json') and not d.endswith('_cla.json')]
-    label_list = ['biking', 'climbing stairs', 'descending stairs', 'jogging', 'lying', 'sitting', 'standing', 'walking']
-    pred_list = ['bik', 'climb', 'descend', 'jog', 'ly', 'sit', 'stand', 'walk']
+base_path = '/data/wjdu/res/model_c2_h3_d128_nh8_nl6'
+eval_file_list = os.listdir(base_path)
+eval_file_list = [ os.path.join(base_path, x) for x in eval_file_list if x.endswith('.json')]
 
 for x in eval_file_list:
     assert os.path.exists(x) == True
 
-num_class = len(label_list)
+# Configuration
 device = "cuda" if torch.cuda.is_available() else "cpu"
-bert_mdl_size = 'bert-large-uncased'
-bert_tokenizer = AutoTokenizer.from_pretrained(bert_mdl_size, model_max_length=512)
-bert_model = BertModel.from_pretrained(bert_mdl_size).to(device)
+label_list = ['downstairs', 'jog', 'lie', 'sit', 'stand', 'upstairs', 'walk']
+bert_model = BertModel.from_pretrained('bert-large-uncased').to(device)
+bert_tokenizer = AutoTokenizer.from_pretrained('bert-large-uncased', model_max_length=512)
 
-all_acc = {}
-for eval_file in eval_file_list:
-    def get_bert_embedding(input_text):
-        input_text = remove_punctuation_and_lowercase(input_text)
-        #print(input_text)
-        inputs = bert_tokenizer(input_text, return_tensors="pt")
-        if inputs['input_ids'].shape[1] > 512:
-            inputs['input_ids'] = inputs['input_ids'][:, :512]
-            inputs['token_type_ids'] = inputs['token_type_ids'][:, :512]
-            inputs['attention_mask'] = inputs['attention_mask'][:, :512]
-            #print('trim the length')
-            #print(inputs['input_ids'].shape)
-        outputs = bert_model(**inputs.to(device))
-        last_hidden_states = torch.mean(outputs.last_hidden_state[0], dim=0).cpu().detach().numpy()
-        return last_hidden_states
+# Helper functions
+def get_bert_embedding(text):
+    inputs = bert_tokenizer(text, return_tensors="pt", truncation=True, max_length=512)
+    outputs = bert_model(**inputs.to(device))
+    return torch.mean(outputs.last_hidden_state[0], dim=0).cpu().detach().numpy()
 
-    # def get_gpt_embedding(input_text, mdl_size='text-embedding-ada-002'):
-    #     openai.api_key = 'your_open_ai_key'
-    #     response = openai.Embedding.create(
-    #         input=input_text,
-    #         model=mdl_size
-    #     )
-    #     embeddings = response['data'][0]['embedding']
-    #     return embeddings
+def cosine_similarity(v1, v2):
+    return np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
 
-    def cosine_similarity(vector1, vector2):
-        dot_product = sum(v1 * v2 for v1, v2 in zip(vector1, vector2))
-        magnitude1 = math.sqrt(sum(v1 ** 2 for v1 in vector1))
-        magnitude2 = math.sqrt(sum(v2 ** 2 for v2 in vector2))
-        return dot_product / (magnitude1 * magnitude2)
-
-    def remove_punctuation_and_lowercase(text):
-        text = text.translate(str.maketrans('', '', string.punctuation))
-        text = text.lower()
-        return text
-
-    def gen_cm(all_truth, all_pred, save_name):
-        from sklearn.metrics import confusion_matrix
-        import matplotlib.pyplot as plt
-        import numpy as np
-
-        # list of label names
-        label_names = list(label_dict.keys())
-
-        # generate confusion matrix
-        cm = confusion_matrix(all_truth, all_pred, labels=range(num_class))
-
-        # plot confusion matrix as a figure
-        plt.imshow(cm, cmap=plt.cm.Blues)
-        plt.title("Confusion Matrix")
-        plt.colorbar()
-        tick_marks = np.arange(len(label_names))
-        plt.xticks(tick_marks, label_names, rotation=90, fontsize=6)
-        plt.yticks(tick_marks, label_names, fontsize=6)
-        plt.xlabel("Predicted Label")
-        plt.ylabel("True Label")
-
-        # add label values to the confusion matrix cells
-        for i in range(len(label_names)):
-            for j in range(len(label_names)):
-                val = 0
-                if i < cm.shape[0] and j < cm.shape[1]:
-                    val = cm[i, j]
-                plt.text(j, i, val, ha="center", va="center", color="black")
-        
-        plt.savefig(save_name, dpi=300)
-        plt.close()
-
-    # load cached label embedding dict
-    # if os.path.exists('../eval_res/label_embed_dict/{:s}_{:s}.json'.format(dataset, text_embed_setting)):
-    if False:
-        with open('../eval_res/label_embed_dict/{:s}_{:s}.json'.format(dataset, text_embed_setting), 'r') as f:
-            json_str = f.read()
-        label_dict = json.loads(json_str, object_pairs_hook=OrderedDict)
+def classify_text(pred_text, label_dict):
+    pred_text = pred_text.lower()
+    if 'down' in pred_text:
+        return 0, False
+    elif 'jog' in pred_text:
+        return 1, False
+    elif 'lie' in pred_text:
+        return 2, False
+    elif 'sit' in pred_text:
+        return 3, False
+    elif 'stand' in pred_text:
+        return 4, False
+    elif 'up' in pred_text:
+        return 5, False
+    elif 'walk' in pred_text:
+        return 6, False
     else:
-        label_dict = OrderedDict()
-        for i in range(len(label_list)):
-            class_code = i
-            class_name = label_list[i]
-            if text_embed_setting == 'bert':
-                label_dict[class_name] = get_bert_embedding(class_name)
-            # elif text_embed_setting == 'gpt':
-            #     label_dict[class_name] = get_gpt_embedding(class_name)
-        # with open('../eval_res/label_embed_dict/{:s}_{:s}.json'.format(dataset, text_embed_setting), 'w') as f:
-        #     print(label_dict)
-        #     json_str = json.dumps(label_dict)
-        #     f.write(json_str)
+        scores = [cosine_similarity(get_bert_embedding(pred_text), embed) for embed in label_dict.values()]
+        return np.argmax(scores), True
 
-    with open(eval_file, 'r') as fp:
-        eval_data = json.load(fp)
+def preprocess_text(text):
+    if len(text) >= 20:
+        text = text[-20:]
+    return text
 
-    if os.path.exists('../eval_res/embedding_cache/{:s}_{:s}_{:s}.json'.format( dataset, llm_task, text_embed_setting)) == True:
-        with open('../eval_res/embedding_cache/{:s}_{:s}_{:s}.json'.format( dataset, llm_task, text_embed_setting), 'r') as f:
-            embed_cache = f.read()
-        embed_cache = json.loads(embed_cache)
-    else:
-        embed_cache = {}
+def preprocess_truth(truth):
+    truth = truth.split('\n')[0].strip()
+    if truth.startswith('.') and truth[1:].startswith('.'):
+        truth = truth[3:]
+    elif truth.startswith('Answer: '):
+        truth = truth[11:]
+    return truth
 
-    def get_pred(cur_pred_list, label_dict, mode='max'):
-        for i, p in enumerate(pred_list):
-            if p in cur_pred_list:
-                return i
-            
-        # at beginning, all zero scores
-        score = np.zeros(num_class)
-        label_embed_list = list(label_dict.values())
-        # pred might not be a single text
-        for cur_pred in cur_pred_list:
-            if cur_pred in embed_cache:
-                cur_pred_embed = embed_cache[cur_pred]
-            else:
-                # if text_embed_setting == 'gpt':
-                #     cur_pred_embed = get_gpt_embedding(cur_pred)
-                # else:
-                cur_pred_embed = get_bert_embedding(cur_pred)
-                embed_cache[cur_pred] = cur_pred_embed
-            for i in range(num_class):
-                if mode == 'accu':
-                    score[i] = score[i] + cosine_similarity(cur_pred_embed, label_embed_list[i])
-                elif mode == 'max':
-                    score[i] = max(score[i], cosine_similarity(cur_pred_embed, label_embed_list[i]))
-        cur_pred = np.argmax(score)
-        return cur_pred
-
-    num_sample = len(eval_data)
-    print('number of samples {:d}'.format(num_sample))
-    all_pred = np.zeros([num_sample, num_class])
-    all_truth = np.zeros([num_sample, num_class])
-    for i in range(num_sample):
-        cur_id = eval_data[i]['data_id']
-        if llm_task == 'cla':
-            cur_pred_list = eval_data[i]['pred']
-        elif llm_task == 'caption':
-            cur_pred_list = eval_data[i]['pred']
-        
-        cur_pred_list : str = cur_pred_list
-        # cur_pred_list = cur_pred_list.split('### Response:')[-1]
-        # cur_pred_list = cur_pred_list.strip()
-
-        if len(cur_pred_list) >=20:
-            cur_pred_list = cur_pred_list[len(cur_pred_list)-20: ]
-        
-        cur_truth = eval_data[i]['ref'].split('\n')[0].strip()
-        if cur_truth[1:].startswith('.'):
-            cur_truth = cur_truth[3:]
-        elif cur_truth.startswith('Answer: '):
-            cur_truth = cur_truth[11:]
-        
-        cur_truth_idx = list(label_dict.keys()).index(cur_truth)
-        print(cur_truth_idx)
-        cur_pred_idx = get_pred(cur_pred_list, label_dict)
-        print('Truth: ', cur_truth_idx, list(label_dict.keys())[cur_truth_idx], 'Pred: ', cur_pred_idx, list(label_dict.keys())[cur_pred_idx], cur_truth_idx==cur_pred_idx, cur_pred_list)
-        all_pred[i, cur_pred_idx] = 1.0
-        all_truth[i, cur_truth_idx] = 1.0
+def plot_confusion_matrix(cm, labels, save_path):
+    plt.imshow(cm, cmap="Blues")
+    plt.colorbar()
+    plt.xticks(np.arange(len(labels)), labels, rotation=90)
+    plt.yticks(np.arange(len(labels)), labels)
+    plt.xlabel("Predicted")
+    plt.ylabel("True")
     
-    save_fold = os.path.join(base_path, "{:s}_cla_report".format('.'.join(eval_file.split('/')[-1].split('.')[:-1])))
-    if os.path.exists(save_fold) == False:
-        os.makedirs(save_fold)
+    # Add label values to the confusion matrix cells
+    for i in range(len(labels)):
+        for j in range(len(labels)):
+            plt.text(j, i, cm[i, j], ha="center", va="center", color="black")
+    
+    plt.savefig(save_path, dpi=300)
+    plt.close()
 
-    # np.save(save_fold + '/all_pred.npy', all_pred)
-    # np.save(save_fold + '/all_truth.npy', all_truth)
-    stats = calculate_stats(all_pred, all_truth)
+# Load and prepare label embeddings
+label_dict = OrderedDict((label, get_bert_embedding(label)) for label in label_list)
+acc_dict = {}
 
-    mAP = np.mean([stat['AP'] for stat in stats])
-    mAUC = np.mean([stat['auc'] for stat in stats])
-    acc = stats[0]['acc']
+# Evaluation
+for eval_file in eval_file_list:
+    out_of_list_embeddings = []
+    error_list = []
+    with open(eval_file, 'r') as f:
+        data = json.load(f)
 
-    np.savetxt(save_fold + '/result_summary.csv', [mAP, mAUC, acc], delimiter=',')
+    num_sample = len(data)
+    num_class = len(label_list)
+    all_pred = np.zeros(num_sample, dtype=int)
+    all_truth = np.zeros(num_sample, dtype=int)
+    
+    for idx, item in enumerate(data):
+        truth_text = preprocess_truth(item['ref'])
+        # pred_text = preprocess_text(item['pred'])
+        pred_text = item['pred']
+        truth_idx = label_list.index(truth_text)
+        pred_idx, is_out = classify_text(pred_text, label_dict)
+        if is_out:
+            item['pred_label'] = label_list[pred_idx]
+            out_of_list_embeddings.append(item)
+        all_truth[idx] = truth_idx
+        all_pred[idx] = pred_idx
+        if truth_idx != pred_idx:
+            error_list.append(item)
 
-    # embed_cache = json.dumps(embed_cache)
-    # save_cache_path = '../eval_res/embedding_cache/{:s}_{:s}_{:s}.json'.format(dataset, llm_task, text_embed_setting)
-    # with open(save_cache_path, 'w') as f:
-    #     f.write(embed_cache)
+    # Metrics and saving results
+    acc = accuracy_score(all_truth, all_pred)
+    report = classification_report(all_truth, all_pred, target_names=label_list, labels=range(num_class), output_dict=True)
+    report1 = classification_report(all_truth, all_pred, target_names=label_list, labels=range(num_class))
+    cm = confusion_matrix(all_truth, all_pred, labels=range(num_class))
+    
+    save_base = os.path.splitext(eval_file)[0]
+    if not os.path.exists(save_base):
+        os.makedirs(save_base)
+    with open(f"{save_base}/report.txt", "w") as f:
+        f.write(json.dumps(report, indent=2))
+    with open(f"{save_base}/report1.txt", "w") as f:
+        f.write(report1)
+    plot_confusion_matrix(cm, label_list, f"{save_base}/cm.png")
+    acc_dict[os.path.basename(eval_file).split('.')[0]] = acc
 
-    sk_acc = accuracy_score(all_truth, all_pred)
-    print('accuracy: ', acc, sk_acc)
+    # Save out-of-list embeddings for review
+    if len(out_of_list_embeddings) > 0:
+        with open(f"{save_base}/out_of_list.json", "w") as f:
+            json.dump(out_of_list_embeddings, f, indent=2)
+    if len(error_list) > 0:
+        with open(f"{save_base}/error_list.json", "w") as f:
+            json.dump(error_list, f, indent=2)
 
-    report = classification_report(all_truth, all_pred, target_names=list(label_dict.keys()))
-    with open(save_fold + "/cla_summary.txt", "w") as f:
-        f.write(report)
-    gen_cm(all_truth.argmax(axis=1), all_pred.argmax(axis=1), save_fold + "/cm.png")
-
-    all_acc[eval_file.split("/")[-1]] = acc
-
-print(json.dumps(all_acc, indent=2, sort_keys=True))
+print(json.dumps(acc_dict, indent=4))

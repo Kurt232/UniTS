@@ -1,10 +1,10 @@
 #!/bin/bash
 
-GPU=$1
-MODEL_CONFIG=$2
-DATA_CONFIG=$3
-OUTPUT_DIR=$4
-MASTER_PORT=$5
+GPU=0
+MODEL_CONFIG=configs/model_c2_h3_d256_nh4_nl6.json
+DATA_CONFIG="/data/wjdu/data4/realworld/realworld_10_thigh_TRAIN.json /data/wjdu/data4/realworld/realworld_10_thigh_TEST.json"
+OUTPUT_DIR="/data/wjdu/TST_HEAD_10"
+MASTER_PORT=2112
 
 # Create a unique output directory based on the model config filename
 MODEL_NAME=$(basename "${MODEL_CONFIG%.*}")

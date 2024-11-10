@@ -10,25 +10,20 @@ from models.tst import TestModel, ModelArgs
 
 device = 'cuda'
 
-load_path = '/data/wjdu/TST_HEAD/checkpoint-199.pth'
-save_path = '/data/wjdu/test/'
+config = 'model_c1_h3_d256_nh8_nl6'
+best_epoch = 123 # 160
+config_path = f'configs/{config}.json'
+load_path = f'/data/wjdu/TST_HEAD/{config}/checkpoint-{best_epoch}.pth'
+save_path = f'/data/wjdu/res/{config}'
 
 num_class = 7
-test_paths = ["/data/wjdu/data4/realworld1/realworld_10_thigh_TEST.json"]
+test_paths = ["/data/wjdu/data4/ds_thigh/motion_TEST.json", "/data/wjdu/data4/ds_thigh/shoaib_TEST.json", "/data/wjdu/data4/ds_thigh/uschar_TEST.json", "/data/wjdu/data4/ds_thigh/wisdm_TEST.json"]
 
 os.makedirs(save_path, exist_ok=True)
 
-def data_preprocess(imu_data):
-    imu_input = torch.tensor(imu_data, dtype=torch.float32)
-    assert imu_input.shape == (6, 200), f"imu_input shape: {imu_input.shape}"
-    imu_input = torch.stack((imu_input[0:3, :], imu_input[3:6, :]))
-    assert imu_input.shape == (2, 3, 200), f"imu_input shape: {imu_input.shape}"
-
-    return imu_input
-
 def main():
     # define the model
-    model_args = ModelArgs()
+    model_args = ModelArgs.from_json(config_path)
     model = TestModel(model_args, num_class)
     if load_path is not None and os.path.exists(load_path):        
         pretrained_mdl = torch.load(load_path, map_location='cpu')
@@ -66,7 +61,7 @@ def main():
         
         with torch.no_grad():
             for data in tqdm(data_item, desc=f"Testing ..."):
-                imu_input = data_preprocess(data['imu_input'])
+                imu_input = torch.tensor(data['imu_input'], dtype=torch.float32)
                 label = mapping[data['output']]
 
                 imu_input = imu_input.unsqueeze(0).to(device, non_blocking=True)
