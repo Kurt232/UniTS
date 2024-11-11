@@ -4,8 +4,6 @@ import matplotlib.pyplot as plt
 import os
 import sys
 
-root = sys.argv[1]
-
 def plot(output_dir):
     log_path = os.path.join(output_dir, 'log.txt')
     data = open(log_path, 'r').read()
@@ -55,8 +53,10 @@ def plot(output_dir):
     plt.savefig(os.path.join(output_dir, 'loss.png'), dpi=300)
     plt.close()
 
-dirs = [d for d in os.listdir(root) if os.path.isdir(os.path.join(root, d))]
-for d in dirs:
-    path = os.path.join(root, d)
-    print(path)
-    plot(path)
+if __name__ == '__main__':
+    root = sys.argv[1]
+    dirs = [d for d in os.listdir(root) if os.path.isdir(os.path.join(root, d))]
+    for d in dirs:
+        path = os.path.join(root, d)
+        print(path)
+        plot(path)

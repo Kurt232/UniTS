@@ -101,18 +101,41 @@ class VisionTransformer(nn.Module):
         x = self.transformer(x)
         x = x.permute(1, 0, 2) # LND -> NLD
 
-        x = self.ln_post(x[:, 0, :]) # (batch_size, d_model)
+        x = self.ln_post(x[:, :, :]) # NLD
         if self.proj is not None:
             x = x @ self.proj
         return x
 
+from models.units import MLPBlock, Mlp, CrossAttention
 class Classifier(nn.Module):
-    def __init__(self, d_model, num_classes):
+    def __init__(self, d_model, num_classes=7, head_dropout=0):
         super().__init__()
-        self.classifier = nn.Linear(d_model, num_classes)
+        d_mid = d_model
+        self.proj_in = nn.Linear(d_model, d_mid)
+        self.cross_att = CrossAttention(d_mid)
 
-    def forward(self, x):
-        return self.classifier(x)
+        self.mlp = MLPBlock(dim=d_mid, mlp_ratio=8, mlp_layer=Mlp,
+                            proj_drop=head_dropout, init_values=None, drop_path=0.0,
+                            act_layer=nn.GELU, norm_layer=nn.LayerNorm,
+                            prefix_token_length=None)
+        
+        self.classifier = nn.Linear(d_mid, num_classes)
+
+    def forward(self, x, category_token=None, return_feature=False):
+        # x: NLD
+        x = self.proj_in(x)
+        B, L, D = x.shape
+        cls_token = x[:, -1:] # [B, 1, D]
+        cls_token = self.cross_att(x, query=cls_token) # [B, 1, D]
+
+        cls_token = self.mlp(cls_token) # [B, 1, D]
+        if return_feature:
+            return cls_token
+        cls_token = cls_token.squeeze(1)  # Remove the singleton dimension: [B, D]
+        
+        # Apply the classifier to get class logits
+        logits = self.classifier(cls_token)  # [B, num_classes]
+        return logits
 
 class TestModel(nn.Module):
     def __init__(self, params: ModelArgs, num_classes: int):
@@ -128,7 +151,7 @@ class TestModel(nn.Module):
             x = x.unsqueeze(1) # (batch_size, 1, feature, seq_len)
         else:
             x = x.view(x.size(0), 2, -1, x.size(2))  # (batch_size, 2, feature//2, seq_len)
-        x = self.vit(x)
+        x = self.vit(x) # NLD
         x = self.classifier(x)
         return x
 
@@ -139,12 +162,11 @@ if __name__ == '__main__':
 
     # Create a random batch of images
     batch_size = 2
-    x = torch.randn(batch_size, args.in_channels, args.img_height, args.img_width)
-    print(x.shape)  # Output: torch.Size([2, 2, 3, 200])
+    x = torch.randn(batch_size, args.in_channels * args.img_height, args.img_width)
+    print(x.shape)  # Output: torch.Size([2, 6, 200])
     # Instantiate the TestModel
     model = TestModel(args, n_class)
 
     # Forward pass
     logits = model(x)
     print(logits.shape)  # Output: torch.Size([2, 10])
-    print(args.__dict__)
