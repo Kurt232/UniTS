@@ -20,7 +20,7 @@ import util.misc as misc
 import util.lr_sched as lr_sched
 from util.misc import NativeScalerWithGradNormCount as NativeScaler
 
-from models.tst import TestModel, ModelArgs
+from models.units import Model, ModelArgs
 
 num_class = 7
 class TSTDataset(Dataset):
@@ -51,8 +51,8 @@ class TSTDataset(Dataset):
     def __getitem__(self, index):
         sample = self.data_list[index]
         imu_data, caption = sample['imu_input'], sample['output']
-        imu_input = torch.tensor(imu_data, dtype=torch.float32)
-        assert imu_input.shape == (6, 200), f"imu_input shape: {imu_input.shape}"
+        imu_input = torch.tensor(imu_data, dtype=torch.float32).T
+        # assert imu_input.shape == (6, 200), f"imu_input shape: {imu_input.shape}"
         label = torch.tensor([self.mapping[caption]], dtype=torch.int8)
 
         return label, imu_input
@@ -255,11 +255,7 @@ def main(args):
     np.random.seed(seed)
     cudnn.benchmark = True
 
-    if args.model_config is None:
-        model_args = ModelArgs()
-    else:
-        model_args = ModelArgs.from_json(args.model_config)
-
+    model_args = ModelArgs()
     log_args = {
         'time': datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S"),
         'model_args': model_args.__dict__,
@@ -269,7 +265,7 @@ def main(args):
         f.write(json.dumps(log_args, indent=4) + "\n")
 
     # Define the model
-    model = TestModel(model_args, num_class)
+    model = Model(model_args)
 
     model.to(device)  # device is cuda
     model_without_ddp = model
