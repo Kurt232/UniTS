@@ -10,14 +10,16 @@ from models.tst import TestModel, ModelArgs
 
 device = 'cuda'
 
-config = 'model_c1_h3_d256_nh8_nl6'
-best_epoch = 123 # 160
+config = 'model_c2_h3_d256_nh4_nl6'
+best_epoch = 186
 config_path = f'configs/{config}.json'
-load_path = f'/data/wjdu/TST_HEAD/{config}/checkpoint-{best_epoch}.pth'
-save_path = f'/data/wjdu/res/{config}'
+# load_path = f'/data/wjdu/TST_HEAD/{config}/checkpoint-{best_epoch}.pth'
+# save_path = f'/data/wjdu/res/{config}'
+load_path = f'/data/wjdu/realworld/TST_HEAD/checkpoint-{best_epoch}.pth'
+save_path = f'/data/wjdu/realworld/res'
 
 num_class = 7
-test_paths = ["/data/wjdu/data4/ds_thigh/motion_TEST.json", "/data/wjdu/data4/ds_thigh/shoaib_TEST.json", "/data/wjdu/data4/ds_thigh/uschar_TEST.json", "/data/wjdu/data4/ds_thigh/wisdm_TEST.json"]
+test_paths = ["/data/wjdu/data4/ds/motion_thigh_TEST.json", "/data/wjdu/data4/ds/shoaib_thigh_TEST.json", "/data/wjdu/data4/ds/uschar_thigh_TEST.json", "/data/wjdu/data4/ds/wisdm_thigh_TEST.json"]
 
 os.makedirs(save_path, exist_ok=True)
 
