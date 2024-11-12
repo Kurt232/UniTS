@@ -12,7 +12,7 @@ from models.units import Model, ModelArgs
 
 device = 'cuda'
 
-load_path = f'/data/wjdu/realworld_thigh/UniTS_HEAD_10/'
+load_path = f'/data/wjdu/realworld_thigh/UniTS_HEAD_p_10/'
 save_path = f'/data/wjdu/realworld_thigh/ds'
 
 num_class = 7
@@ -278,8 +278,10 @@ def main():
     model = Model(model_args)
     assert os.path.exists(load_path), f"Invalid load_path: {load_path}"
     plot(load_path)
+    if not load_path.endswith('/'):
+        load_path += '/'
     best_epoch = json.load(open(os.path.join(load_path, 'best.json')))['best_epoch']
-    if load_path is not None and os.path.exists(load_path):        
+    if load_path is not None and os.path.exists(load_path):
         pretrained_mdl = torch.load(os.path.join(load_path, f'checkpoint-{best_epoch}.pth'), map_location='cpu')
         pretrained_mdl = torch.load(os.path.join(load_path, f'checkpoint-{best_epoch}.pth'), map_location='cpu')
         msg = model.load_state_dict(pretrained_mdl['model'], strict=False)

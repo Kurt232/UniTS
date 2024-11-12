@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 
 # os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
-base_path = '/data/wjdu/res/model_c2_h3_d128_nh8_nl6'
+base_path = '/data/wjdu/realworld_thigh/ds'
 eval_file_list = os.listdir(base_path)
 eval_file_list = [ os.path.join(base_path, x) for x in eval_file_list if x.endswith('.json')]
 
@@ -134,4 +134,4 @@ for eval_file in eval_file_list:
         with open(f"{save_base}/error_list.json", "w") as f:
             json.dump(error_list, f, indent=2)
 
-print(json.dumps(acc_dict, indent=4))
+print(json.dumps(acc_dict, indent=4, sort_keys=True))
