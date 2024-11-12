@@ -266,7 +266,12 @@ def main(args):
 
     # Define the model
     model = Model(model_args)
-
+    load_path = args.load_path
+    if load_path is not None and os.path.exists(load_path):
+        print(f"Loading model from {load_path}")
+        pretrained_mdl = torch.load(load_path, map_location='cpu')
+        msg = model.load_state_dict(pretrained_mdl, strict=False)
+        print(msg)
     model.to(device)  # device is cuda
     model_without_ddp = model
 
