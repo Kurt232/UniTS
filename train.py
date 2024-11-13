@@ -438,8 +438,9 @@ def main(args):
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
     print('Training time {}'.format(total_time_str))
     
-    with open(os.path.join(args.output_dir, "best.json"), mode="a", encoding="utf-8") as f:
-        f.write(json.dumps({"best_epoch": best_epoch, "vali_acc": best_vali_acc, "test_acc": best_epoch_test_acc}, indent=4) + "\n")
+    if args.output_dir and misc.is_main_process():
+        with open(os.path.join(args.output_dir, "best.json"), mode="a", encoding="utf-8") as f:
+            f.write(json.dumps({"best_epoch": best_epoch, "vali_acc": best_vali_acc, "test_acc": best_epoch_test_acc}, indent=4) + "\n")
 
 
 if __name__ == '__main__':

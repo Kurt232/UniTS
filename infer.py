@@ -12,8 +12,8 @@ from models.units import Model, ModelArgs
 
 device = 'cuda'
 
-load_path = f'/data/wjdu/realworld_thigh/UniTS_HEAD_1_10/'
-save_path = f'/data/wjdu/realworld_thigh/ds'
+load_path = f'/data/wjdu/Nov12/UniTS_HEAD_4_10/'
+save_path = f'/data/wjdu/Nov12/ds'
 
 num_class = 7
 test_paths = ["/data/wjdu/data4/ds/motion_thigh_TEST.json", "/data/wjdu/data4/ds/shoaib_thigh_TEST.json", "/data/wjdu/data4/ds/uschar_thigh_TEST.json", "/data/wjdu/data4/ds/wisdm_thigh_TEST.json"]
