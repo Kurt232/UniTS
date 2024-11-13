@@ -716,7 +716,10 @@ class Model(nn.Module):
         else:
             stdev = torch.sqrt(
                 torch.var(x, dim=1, keepdim=True, unbiased=False) + 1e-5)
-        x /= stdev
+        if self.task_name == 'classification':
+            x = x + means # for classification, the input is normalized
+        else:
+            x /= stdev
         x = x.permute(0, 2, 1)
         remainder = x.shape[2] % self.patch_len
         if remainder != 0:

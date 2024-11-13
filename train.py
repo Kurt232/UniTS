@@ -51,8 +51,8 @@ class TSTDataset(Dataset):
     def __getitem__(self, index):
         sample = self.data_list[index]
         imu_data, caption = sample['imu_input'], sample['output']
-        imu_input = torch.tensor(imu_data, dtype=torch.float32).T
-        # assert imu_input.shape == (6, 200), f"imu_input shape: {imu_input.shape}"
+        imu_input = torch.tensor(imu_data, dtype=torch.float32)
+        assert imu_input.shape == (200, 6), f"imu_input shape: {imu_input.shape}"
         label = torch.tensor([self.mapping[caption]], dtype=torch.int8)
 
         return label, imu_input
