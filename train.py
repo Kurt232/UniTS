@@ -20,12 +20,14 @@ import util.misc as misc
 import util.lr_sched as lr_sched
 from util.misc import NativeScalerWithGradNormCount as NativeScaler
 
-from models.units import Model, ModelArgs
+from models.vit import Model, transform_train
+import cv2
+from PIL import Image
 
 num_class = 7
-class TSTDataset(Dataset):
+class Dataset(Dataset):
     def __init__(self, paths):
-
+        self.transform = transform_train
         data_list = []
         for meta_path in paths:
             meta_l = json.load(open(meta_path))
@@ -50,12 +52,13 @@ class TSTDataset(Dataset):
 
     def __getitem__(self, index):
         sample = self.data_list[index]
-        imu_data, caption = sample['imu_input'], sample['output']
-        imu_input = torch.tensor(imu_data, dtype=torch.float32).T
-        # assert imu_input.shape == (6, 200), f"imu_input shape: {imu_input.shape}"
+        filename, caption = sample['image'], sample['output']
+        image = cv2.imread(filename)
+        image = Image.fromarray(image)
+        image = self.transform(image)
         label = torch.tensor([self.mapping[caption]], dtype=torch.int8)
 
-        return label, imu_input
+        return label, image
 
 def train_one_epoch(model: nn.Module,
                     data_loader: Iterable, optimizer: torch.optim.Optimizer,
@@ -255,23 +258,23 @@ def main(args):
     np.random.seed(seed)
     cudnn.benchmark = True
 
-    model_args = ModelArgs()
+    clip_model="ViT-B/16"
     log_args = {
         'time': datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S"),
-        'model_args': model_args.__dict__,
+        'model_args': clip_model,
         'train_args': vars(args),
     }
     with open(os.path.join(args.output_dir, "args.json"), mode="w", encoding="utf-8") as f:
         f.write(json.dumps(log_args, indent=4) + "\n")
 
     # Define the model
-    model = Model(model_args)
-    load_path = args.load_path
-    if load_path is not None and os.path.exists(load_path):
-        print(f"Loading model from {load_path}")
-        pretrained_mdl = torch.load(load_path, map_location='cpu')
-        msg = model.load_state_dict(pretrained_mdl, strict=False)
-        print(msg)
+    model = Model(clip_model)
+    # load_path = args.load_path
+    # if load_path is not None and os.path.exists(load_path):
+    #     print(f"Loading model from {load_path}")
+    #     pretrained_mdl = torch.load(load_path, map_location='cpu')
+    #     msg = model.load_state_dict(pretrained_mdl, strict=False)
+    #     print(msg)
     model.to(device)  # device is cuda
     model_without_ddp = model
 
@@ -304,9 +307,9 @@ def main(args):
     loss_scaler = NativeScaler()
 
     # Create the train dataset
-    dataset_train = TSTDataset([args.data_config[0]])
+    dataset_train = Dataset([args.data_config[0]])
     print(f"train dataset size: {len(dataset_train)}")
-    dataset_test = TSTDataset([args.data_config[1]])
+    dataset_test = Dataset([args.data_config[1]])
 
     # Split the dataset into training, validation, and test sets (90% train, 10% val)
     train_size = len(dataset_train)

@@ -7,11 +7,13 @@ from tqdm import tqdm
 import torch
 from plot import plot
 
-from models.units import Model, ModelArgs
+from models.vit import Model, transform_train
+import cv2
+from PIL import Image
 
 device = 'cuda'
 
-load_path = f'/data/wjdu/realworld_thigh/UniTS_HEAD_p_10/'
+load_path = f'/data/wjdu/realworld_thigh/ViT_HEAD_10/'
 save_path = f'/data/wjdu/realworld_thigh/ds'
 
 num_class = 7
@@ -145,10 +147,10 @@ def eval(eval_file):
     
     return acc
 
-def main():
+if __name__ == '__main__':
     # define the model
-    model_args = ModelArgs()
-    model = Model(model_args)
+    clip_model = 'ViT-B/16'
+    model = Model(clip_model)
     assert os.path.exists(load_path), f"Invalid load_path: {load_path}"
     plot(load_path)
     if not load_path.endswith('/'):
@@ -190,11 +192,15 @@ def main():
         
         with torch.no_grad():
             for data in tqdm(data_item, desc=f"Testing ..."):
-                imu_input = torch.tensor(data['imu_input'], dtype=torch.float32).T
-                label = mapping[data['output']]
+                filename, caption = data['image'], data['output']
+                image = cv2.imread(filename)
+                image = Image.fromarray(image)
+                image = transform_train(image)
 
-                imu_input = imu_input.unsqueeze(0).to(device, non_blocking=True)
-                output = model(imu_input) # [1, 5]
+                label = mapping[caption]
+
+                imgs = image.unsqueeze(0).to(device, non_blocking=True)
+                output = model(imgs) # [1, 5]
 
                 # Calculate accuracy
                 _, pred_index = torch.max(output, 1)
@@ -212,6 +218,3 @@ def main():
 
         eval(prediction_file)
     print(json.dumps(acc_total, indent=2))
-
-if __name__ == '__main__':
-    main()
