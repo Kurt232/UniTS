@@ -26,9 +26,10 @@ from PIL import Image
 
 num_class = 7
 class Dataset(Dataset):
-    def __init__(self, paths):
+    def __init__(self, config, is_train=True):
         self.transform = transform_train
         data_list = []
+        paths = yaml.safe_load(open(config))['TRAIN' if is_train else 'TEST']
         for meta_path in paths:
             meta_l = json.load(open(meta_path))
             print(f"{meta_path}: len {len(meta_l)}")
@@ -175,7 +176,7 @@ def get_args_parser():
                         help='epochs to warmup LR')
 
     # Dataset parameters
-    parser.add_argument('--data_config', nargs='+', default=None,
+    parser.add_argument('--data_config', default=None,
                         help='dataset config path')
     parser.add_argument('--num_workers', default=10, type=int)
     parser.add_argument('--pin_mem', action='store_true',
@@ -307,14 +308,14 @@ def main(args):
     loss_scaler = NativeScaler()
 
     # Create the train dataset
-    dataset_train = Dataset([args.data_config[0]])
+    dataset_train = Dataset(args.data_config, is_train=True)
     print(f"train dataset size: {len(dataset_train)}")
-    dataset_test = Dataset([args.data_config[1]])
+    dataset_test = Dataset(args.data_config, is_train=False)
+    print(f"test dataset size: {len(dataset_test)}")
 
-    # Split the dataset into training, validation, and test sets (90% train, 10% val)
-    train_size = len(dataset_train)
-    val_size = int(train_size * 0.1)
-    train_size -= val_size
+    # Split the dataset into training, validation, and test sets (80-10-10)
+    val_size = len(dataset_test) # 10% of the dataset
+    train_size = len(dataset_train) - val_size
 
     # Ensure reproducibility across different processes
     generator = torch.Generator()
@@ -441,8 +442,9 @@ def main(args):
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
     print('Training time {}'.format(total_time_str))
     
-    with open(os.path.join(args.output_dir, "best.json"), mode="a", encoding="utf-8") as f:
-        f.write(json.dumps({"best_epoch": best_epoch, "vali_acc": best_vali_acc, "test_acc": best_epoch_test_acc}, indent=4) + "\n")
+    if args.output_dir and misc.is_main_process():
+        with open(os.path.join(args.output_dir, "best.json"), mode="a", encoding="utf-8") as f:
+            f.write(json.dumps({"best_epoch": best_epoch, "vali_acc": best_vali_acc, "test_acc": best_epoch_test_acc}, indent=4) + "\n")
 
 
 if __name__ == '__main__':

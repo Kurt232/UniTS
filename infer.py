@@ -11,13 +11,14 @@ from models.vit import Model, transform_train
 import cv2
 from PIL import Image
 
+# os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 device = 'cuda'
 
-load_path = f'/data/wjdu/realworld_thigh/ViT_HEAD_10/'
-save_path = f'/data/wjdu/realworld_thigh/ds'
+load_path = f'/data/wjdu/multi/ViT_HEAD/'
+save_path = f'/data/wjdu/multi/results/'
 
 num_class = 7
-test_paths = ["/data/wjdu/data4/ds/motion_thigh_TEST.json", "/data/wjdu/data4/ds/shoaib_thigh_TEST.json", "/data/wjdu/data4/ds/uschar_thigh_TEST.json", "/data/wjdu/data4/ds/wisdm_thigh_TEST.json"]
+config_paths = ["data/config.yaml"]
 
 os.makedirs(save_path, exist_ok=True)
 
@@ -147,25 +148,11 @@ def eval(eval_file):
     
     return acc
 
-if __name__ == '__main__':
-    # define the model
-    clip_model = 'ViT-B/16'
-    model = Model(clip_model)
-    assert os.path.exists(load_path), f"Invalid load_path: {load_path}"
-    plot(load_path)
-    if not load_path.endswith('/'):
-        load_path += '/'
-    best_epoch = json.load(open(os.path.join(load_path, 'best.json')))['best_epoch']
-    if load_path is not None and os.path.exists(load_path):
-        pretrained_mdl = torch.load(os.path.join(load_path, f'checkpoint-{best_epoch}.pth'), map_location='cpu')
-        msg = model.load_state_dict(pretrained_mdl['model'], strict=False)
-        print(msg)
-    
-    model.to(device) # device is cuda
-    # set trainable parameters
-
+def infer(config_path, model):
     data_list = []
     print("Dataset:")
+    
+    test_paths = yaml.safe_load(open(config_path))['TEST']
     for i, meta_path in enumerate(test_paths):
         print(f"\t{i}. {meta_path.split('/')[-1]}")
         meta_l = json.load(open(meta_path))
@@ -218,3 +205,25 @@ if __name__ == '__main__':
 
         eval(prediction_file)
     print(json.dumps(acc_total, indent=2))
+
+if __name__ == '__main__':
+    # define the model
+    clip_model = 'ViT-B/16'
+    model = Model(clip_model)
+    if not load_path.endswith('.pth'):
+        best_epoch = json.load(open(os.path.join(load_path, 'best.json')))['best_epoch']
+        load_path = os.path.join(load_path, f'checkpoint-{best_epoch}.pth')
+    assert load_path is not None and os.path.exists(load_path)
+    
+    plot(os.path.dirname(load_path))
+
+    pretrained_mdl = torch.load(load_path, map_location='cpu')
+    msg = model.load_state_dict(pretrained_mdl['model'], strict=True)
+    print(msg)
+    
+    
+    model.to(device) # device is cuda
+    # set trainable parameters
+
+    for c_path in config_paths:
+        infer(c_path, model)

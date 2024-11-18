@@ -1,2 +1,11 @@
-META:
-  - '/data/wenhao/wjdu/fusion_norm/train_pure_cla.json'
+TRAIN:
+    - '/data/wjdu/dataset/50hz_2s/motion_90_thigh_TRAIN.json'
+    - '/data/wjdu/dataset/50hz_2s/realworld_90_thigh_TRAIN.json'
+    - '/data/wjdu/dataset/50hz_2s/shoaib_90_thigh_TRAIN.json'
+    - '/data/wjdu/dataset/50hz_2s/uschar_90_thigh_TRAIN.json'
+
+TEST:
+    - '/data/wjdu/dataset/50hz_2s/motion_10_thigh_TEST.json'
+    - '/data/wjdu/dataset/50hz_2s/realworld_10_thigh_TEST.json'
+    - '/data/wjdu/dataset/50hz_2s/shoaib_10_thigh_TEST.json'
+    - '/data/wjdu/dataset/50hz_2s/uschar_10_thigh_TEST.json'
