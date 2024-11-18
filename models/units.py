@@ -526,40 +526,11 @@ class PatchEmbedding(nn.Module):
         x = self.value_embedding(x)
         return self.dropout(x), n_vars
 
-
-class CLSHead(nn.Module):
-    def __init__(self, d_model, head_dropout=0):
-        super().__init__()
-        d_mid = d_model
-        self.proj_in = nn.Linear(d_model, d_mid)
-        self.cross_att = CrossAttention(d_mid)
-
-        self.mlp = MLPBlock(dim=d_mid, mlp_ratio=8, mlp_layer=Mlp,
-                            proj_drop=head_dropout, init_values=None, drop_path=0.0,
-                            act_layer=nn.GELU, norm_layer=nn.LayerNorm,
-                            prefix_token_length=None)
-
-    def forward(self, x, category_token=None, return_feature=False):
-        category_token = category_token.to(x.device)
-        x = self.proj_in(x)
-        B, V, L, C = x.shape
-        x = x.view(-1, L, C)
-        cls_token = x[:, -1:]
-        cls_token = self.cross_att(x, query=cls_token)
-        cls_token = cls_token.reshape(B, V, -1, C)
-
-        cls_token = self.mlp(cls_token)
-        if return_feature:
-            return cls_token
-        m = category_token.shape[2]
-        cls_token = cls_token.expand(B, V, m, C)
-        distance = torch.einsum('nvkc,nvmc->nvm', cls_token, category_token)
-
-        distance = distance.mean(dim=1)
-        return distance
-
 # class CLSHead(nn.Module):
-#     def __init__(self, d_model, num_classes=7, head_dropout=0):
+#     '''
+#     hard to train
+#     '''
+#     def __init__(self, d_model, head_dropout=0):
 #         super().__init__()
 #         d_mid = d_model
 #         self.proj_in = nn.Linear(d_model, d_mid)
@@ -569,26 +540,57 @@ class CLSHead(nn.Module):
 #                             proj_drop=head_dropout, init_values=None, drop_path=0.0,
 #                             act_layer=nn.GELU, norm_layer=nn.LayerNorm,
 #                             prefix_token_length=None)
-        
-#         self.classifier = nn.Linear(d_mid, num_classes)
 
 #     def forward(self, x, category_token=None, return_feature=False):
+#         category_token = category_token.to(x.device)
 #         x = self.proj_in(x)
 #         B, V, L, C = x.shape
 #         x = x.view(-1, L, C)
-#         cls_token = x[:, -1:] # [B*V, 1, C]
-#         cls_token = self.cross_att(x, query=cls_token) # [B*V, 1, C]
-#         cls_token = cls_token.reshape(B, V, -1, C) # [B, V, 1, C]
+#         cls_token = x[:, -1:]
+#         cls_token = self.cross_att(x, query=cls_token)
+#         cls_token = cls_token.reshape(B, V, -1, C)
 
-#         cls_token = self.mlp(cls_token) # [B, V, 1, C]
+#         cls_token = self.mlp(cls_token)
 #         if return_feature:
 #             return cls_token
-#         cls_token = cls_token.squeeze(2)  # Remove the singleton dimension: [B, V, C]
-#         cls_token = cls_token.mean(dim=1)  # Average over V dimension: [B, C]
+#         m = category_token.shape[2]
+#         cls_token = cls_token.expand(B, V, m, C)
+#         distance = torch.einsum('nvkc,nvmc->nvm', cls_token, category_token)
+
+#         distance = distance.mean(dim=1)
+#         return distance
+
+class CLSHead(nn.Module):
+    def __init__(self, d_model, num_classes=7, head_dropout=0):
+        super().__init__()
+        d_mid = d_model
+        self.proj_in = nn.Linear(d_model, d_mid)
+        self.cross_att = CrossAttention(d_mid)
+
+        self.mlp = MLPBlock(dim=d_mid, mlp_ratio=8, mlp_layer=Mlp,
+                            proj_drop=head_dropout, init_values=None, drop_path=0.0,
+                            act_layer=nn.GELU, norm_layer=nn.LayerNorm,
+                            prefix_token_length=None)
         
-#         # Apply the classifier to get class logits
-#         logits = self.classifier(cls_token)  # [B, num_classes]
-#         return logits
+        self.classifier = nn.Linear(d_mid, num_classes)
+
+    def forward(self, x, category_token=None, return_feature=False):
+        x = self.proj_in(x)
+        B, V, L, C = x.shape
+        x = x.view(-1, L, C)
+        cls_token = x[:, -1:] # [B*V, 1, C]
+        cls_token = self.cross_att(x, query=cls_token) # [B*V, 1, C]
+        cls_token = cls_token.reshape(B, V, -1, C) # [B, V, 1, C]
+
+        cls_token = self.mlp(cls_token) # [B, V, 1, C]
+        if return_feature:
+            return cls_token
+        cls_token = cls_token.squeeze(2)  # Remove the singleton dimension: [B, V, C]
+        cls_token = cls_token.mean(dim=1)  # Average over V dimension: [B, C]
+        
+        # Apply the classifier to get class logits
+        logits = self.classifier(cls_token)  # [B, num_classes]
+        return logits
 
 class ForecastHead(nn.Module):
     def __init__(self, d_model, patch_len, stride, pad, head_dropout=0, prefix_token_length=None):

@@ -6,17 +6,17 @@ import yaml
 from tqdm import tqdm
 import torch
 from plot import plot
-from plot import plot
 
 from models.units import Model, ModelArgs
 
+# os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 device = 'cuda'
 
-load_path = f'/data/wjdu/Nov12/UniTS_HEAD_4_10/'
-save_path = f'/data/wjdu/Nov12/ds'
+load_path = f'/data/wjdu/multi/UniTS_HEAD/checkpoint-50.pth'
+save_path = f'/data/wjdu/multi/results/'
 
 num_class = 7
-test_paths = ["/data/wjdu/data4/ds/motion_thigh_TEST.json", "/data/wjdu/data4/ds/shoaib_thigh_TEST.json", "/data/wjdu/data4/ds/uschar_thigh_TEST.json", "/data/wjdu/data4/ds/wisdm_thigh_TEST.json"]
+config_paths = ["data/config.yaml"]
 
 os.makedirs(save_path, exist_ok=True)
 
@@ -146,27 +146,11 @@ def eval(eval_file):
     
     return acc
 
-if __name__ == '__main__':
-    # define the model
-    model_args = ModelArgs()
-    model = Model(model_args)
-    assert os.path.exists(load_path), f"Invalid load_path: {load_path}"
-    plot(load_path)
-    if not load_path.endswith('/'):
-        load_path += '/'
-    best_epoch = json.load(open(os.path.join(load_path, 'best.json')))['best_epoch']
-    if load_path is not None and os.path.exists(load_path):
-        pretrained_mdl = torch.load(os.path.join(load_path, f'checkpoint-{best_epoch}.pth'), map_location='cpu')
-        pretrained_mdl = torch.load(os.path.join(load_path, f'checkpoint-{best_epoch}.pth'), map_location='cpu')
-        msg = model.load_state_dict(pretrained_mdl['model'], strict=False)
-        print(msg)
-    
-    
-    model.to(device) # device is cuda
-    # set trainable parameters
-
+def infer(config_path, model):
     data_list = []
     print("Dataset:")
+    
+    test_paths = yaml.safe_load(open(config_path))['TEST']
     for i, meta_path in enumerate(test_paths):
         print(f"\t{i}. {meta_path.split('/')[-1]}")
         meta_l = json.load(open(meta_path))
@@ -194,10 +178,10 @@ if __name__ == '__main__':
         with torch.no_grad():
             for data in tqdm(data_item, desc=f"Testing ..."):
                 imu_input = torch.tensor(data['imu_input'], dtype=torch.float32)
-                label = mapping[data['output']]
+                label = mapping[data['output']] # an integer
 
                 imu_input = imu_input.unsqueeze(0).to(device, non_blocking=True)
-                output = model(imu_input) # [1, 5]
+                output = model(imu_input)
 
                 # Calculate accuracy
                 _, pred_index = torch.max(output, 1)
@@ -213,7 +197,27 @@ if __name__ == '__main__':
         print(f"{result_file} ", "Accuracy: {:.4f}%".format(correct_pred / len(data_item) * 100))
         acc_total[result_file] = correct_pred / len(data_item)
 
-        eval(prediction_file)
-
-        eval(prediction_file)
+        # eval(prediction_file)
     print(json.dumps(acc_total, indent=2))
+
+if __name__ == '__main__':
+    # define the model
+    model_args = ModelArgs()
+    model = Model(model_args)
+    if not load_path.endswith('.pth'):
+        best_epoch = json.load(open(os.path.join(load_path, 'best.json')))['best_epoch']
+        load_path = os.path.join(load_path, f'checkpoint-{best_epoch}.pth')
+    assert load_path is not None and os.path.exists(load_path)
+    
+    plot(os.path.dirname(load_path))
+
+    pretrained_mdl = torch.load(load_path, map_location='cpu')
+    msg = model.load_state_dict(pretrained_mdl['model'], strict=True)
+    print(msg)
+    
+    
+    model.to(device) # device is cuda
+    # set trainable parameters
+
+    for c_path in config_paths:
+        infer(c_path, model)
