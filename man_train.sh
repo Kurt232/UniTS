@@ -7,7 +7,7 @@ LOAD_PATH=""
 MASTER_PORT=2333
 NNODE=$(($(echo $GPUS | tr -cd , | wc -c) + 1))
 ROOT="/data/wjdu/benchmark"
-MODEL="UniTS_HEAD"
+MODEL="LIMU_HEAD"
 
 DATA_CONFIG="data/benchmark/up.yaml"
 FLAG=$(basename ${DATA_CONFIG%.yaml})

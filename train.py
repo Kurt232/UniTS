@@ -17,7 +17,7 @@ from torch.utils.tensorboard import SummaryWriter
 import util.misc as misc
 from util.misc import NativeScalerWithGradNormCount as NativeScaler
 
-from models.units import UniTS
+from models.limu import Model, ModelArgs
 from data.dataset import IMUDataset
 from engine import train_one_epoch, evaluate
 
@@ -108,16 +108,17 @@ def main(args):
     np.random.seed(seed)
     cudnn.benchmark = True
 
+    model_args = ModelArgs()
     log_args = {
         'time': datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S"),
-        'model_args': '',
+        'model_args': model_args.__dict__,
         'train_args': vars(args),
     }
     with open(os.path.join(args.output_dir, "args.json"), mode="w", encoding="utf-8") as f:
         f.write(json.dumps(log_args, indent=4) + "\n")
 
     # Define the model
-    model = UniTS(enc_in=6, num_class=7)
+    model = Model(model_args)
     load_path = args.load_path
     if load_path is not None and os.path.exists(load_path):
         print(f"Loading model from {load_path}")

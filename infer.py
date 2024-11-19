@@ -9,7 +9,7 @@ from plot import plot
 import argparse
 import pandas as pd
 
-from models.units import UniTS
+from models.limu import Model, ModelArgs
 
 def get_args_parser():
     parser = argparse.ArgumentParser('inference', add_help=False)
@@ -236,7 +236,8 @@ def infer(config_path, model):
 
 if __name__ == '__main__':
     # define the model
-    model = UniTS(enc_in=6, num_class=7)
+    model_args = ModelArgs()
+    model = Model(model_args)
     if not load_path.endswith('.pth'):
         best_epoch = json.load(open(os.path.join(load_path, 'best.json')))['best_epoch']
         load_path = os.path.join(load_path, f'checkpoint-{best_epoch}.pth')
