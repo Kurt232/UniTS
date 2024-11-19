@@ -20,7 +20,7 @@ import util.misc as misc
 import util.lr_sched as lr_sched
 from util.misc import NativeScalerWithGradNormCount as NativeScaler
 
-from models.units import Model, ModelArgs
+from models.limu import Model, ModelArgs
 
 num_class = 7
 class Dataset(Dataset):

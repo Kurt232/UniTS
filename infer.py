@@ -7,16 +7,16 @@ from tqdm import tqdm
 import torch
 from plot import plot
 
-from models.units import Model, ModelArgs
+from models.limu import Model, ModelArgs
 
 # os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 device = 'cuda'
 
-load_path = f'/data/wjdu/multi/UniTS_HEAD/checkpoint-50.pth'
-save_path = f'/data/wjdu/multi/results/'
+load_path = f'/data/wjdu/multi/LIMU_HEAD/'
+save_path = f'/data/wjdu/multi/ds/'
 
 num_class = 7
-config_paths = ["data/config.yaml"]
+config_paths = ["data/config_c.yaml"]
 
 os.makedirs(save_path, exist_ok=True)
 
@@ -197,7 +197,7 @@ def infer(config_path, model):
         print(f"{result_file} ", "Accuracy: {:.4f}%".format(correct_pred / len(data_item) * 100))
         acc_total[result_file] = correct_pred / len(data_item)
 
-        # eval(prediction_file)
+        eval(prediction_file)
     print(json.dumps(acc_total, indent=2))
 
 if __name__ == '__main__':
@@ -209,6 +209,7 @@ if __name__ == '__main__':
         load_path = os.path.join(load_path, f'checkpoint-{best_epoch}.pth')
     assert load_path is not None and os.path.exists(load_path)
     
+    print(load_path)
     plot(os.path.dirname(load_path))
 
     pretrained_mdl = torch.load(load_path, map_location='cpu')
