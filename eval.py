@@ -9,9 +9,9 @@ import matplotlib.pyplot as plt
 
 # os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
-base_path = '/data/wjdu/realworld_thigh/ds'
+base_path = '/data/wjdu/multi/ds'
 eval_file_list = os.listdir(base_path)
-eval_file_list = [ os.path.join(base_path, x) for x in eval_file_list if x.endswith('.json')]
+eval_file_list = [ os.path.join(base_path, x) for x in eval_file_list if x.endswith('.json') and x.startswith('ViT_LLM')]
 
 for x in eval_file_list:
     assert os.path.exists(x) == True

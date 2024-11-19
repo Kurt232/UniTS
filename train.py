@@ -20,7 +20,7 @@ import util.misc as misc
 import util.lr_sched as lr_sched
 from util.misc import NativeScalerWithGradNormCount as NativeScaler
 
-from models.units import Model, ModelArgs
+from models.units import UniTS
 
 num_class = 7
 class Dataset(Dataset):
@@ -256,17 +256,16 @@ def main(args):
     np.random.seed(seed)
     cudnn.benchmark = True
 
-    model_args = ModelArgs()
     log_args = {
         'time': datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S"),
-        'model_args': model_args.__dict__,
+        'model_args': '',
         'train_args': vars(args),
     }
     with open(os.path.join(args.output_dir, "args.json"), mode="w", encoding="utf-8") as f:
         f.write(json.dumps(log_args, indent=4) + "\n")
 
     # Define the model
-    model = Model(model_args)
+    model = UniTS(enc_in=6, num_class=7)
     load_path = args.load_path
     if load_path is not None and os.path.exists(load_path):
         print(f"Loading model from {load_path}")
