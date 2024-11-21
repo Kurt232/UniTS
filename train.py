@@ -20,7 +20,7 @@ import util.misc as misc
 import util.lr_sched as lr_sched
 from util.misc import NativeScalerWithGradNormCount as NativeScaler
 
-from models.units import UniTS
+from models.mamba import Mamba
 
 num_class = 7
 class Dataset(Dataset):
@@ -88,10 +88,12 @@ def train_one_epoch(model: nn.Module,
         criterion = torch.nn.CrossEntropyLoss()
         imu_input = imu_input.to(device, non_blocking=True)
         label = label.to(device, non_blocking=True)
-        with torch.cuda.amp.autocast():
-            output = model(imu_input)
-            c_loss = criterion(output, label.long().squeeze(-1))
-
+        output = model(imu_input)
+        c_loss = criterion(output, label.long().squeeze(-1))
+        # with torch.cuda.amp.autocast():
+        #     output = model(imu_input)
+        #     c_loss = criterion(output, label.long().squeeze(-1))
+        
         # Calculate accuracy
         _, preds = torch.max(output, 1) # output: [B, 8]
         label_indices = label.view(-1) # label: [B, 1]
@@ -265,7 +267,7 @@ def main(args):
         f.write(json.dumps(log_args, indent=4) + "\n")
 
     # Define the model
-    model = UniTS(enc_in=6, num_class=7)
+    model = Mamba(enc_in=6, num_class=7)
     load_path = args.load_path
     if load_path is not None and os.path.exists(load_path):
         print(f"Loading model from {load_path}")

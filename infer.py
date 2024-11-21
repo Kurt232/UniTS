@@ -7,17 +7,16 @@ from tqdm import tqdm
 import torch
 from plot import plot
 
-from models.units import UniTS
+from models.mamba import Mamba
 
 # os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 device = 'cuda'
 
-load_path = f'/data/wjdu/multi/UniTS_HEAD'
-save_path = f'/data/wjdu/multi/ds'
+load_path = f'/data/wjdu/multi/expr/Mamba_HEAD'
+save_path = f'/data/wjdu/multi/expr/ds'
 
 num_class = 7
-# config_paths = ["data/config.yaml"]
-config_paths = ['data/config_c.yaml']
+config_paths = ["data/config_c.yaml"]
 
 os.makedirs(save_path, exist_ok=True)
 
@@ -203,7 +202,7 @@ def infer(config_path, model):
 
 if __name__ == '__main__':
     # define the model
-    model = UniTS(enc_in=6, num_class=7)
+    model = Mamba(enc_in=6, num_class=7)
     if not load_path.endswith('.pth'):
         best_epoch = json.load(open(os.path.join(load_path, 'best.json')))['best_epoch']
         load_path = os.path.join(load_path, f'checkpoint-{best_epoch}.pth')
