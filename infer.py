@@ -12,12 +12,11 @@ from models.units import UniTS
 # os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 device = 'cuda'
 
-load_path = f'/data/wjdu/multi/UniTS_HEAD'
-save_path = f'/data/wjdu/multi/ds'
+load_path = f'/data/wjdu/multi/expr/UniTS_HEAD_30e'
+save_path = f'/data/wjdu/multi/expr/ds'
 
 num_class = 7
-# config_paths = ["data/config.yaml"]
-config_paths = ['data/config_c.yaml']
+config_paths = ["data/config_c.yaml"]
 
 os.makedirs(save_path, exist_ok=True)
 
@@ -220,3 +219,4 @@ if __name__ == '__main__':
 
     for c_path in config_paths:
         infer(c_path, model)
+    print(load_path)

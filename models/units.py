@@ -637,7 +637,7 @@ class UniTS(nn.Module):
                  prompt_num=10,
                  d_model=128, stride=16, 
                  patch_len=16, dropout=0.1, 
-                 e_layers=3, n_heads=8
+                 e_layers=30, n_heads=8
                 ):
         super().__init__()
 
