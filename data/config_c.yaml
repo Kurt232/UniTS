@@ -1,5 +1,5 @@
 TEST:
-    # - '/data/wjdu/dataset/ds/domino_50_thigh_TEST.json'
-    # - '/data/wjdu/dataset/ds/wisdm_50_thigh_TEST.json'
+    - '/data/wjdu/dataset/ds/domino_50_thigh_TEST.json'
+    - '/data/wjdu/dataset/ds/wisdm_50_thigh_TEST.json'
     - '/data/wjdu/dataset/ds/hhar_50_waist_TEST.json'
-    # - '/data/wjdu/dataset/ds/ucihar_50_waist_TEST.json'
+    - '/data/wjdu/dataset/ds/ucihar_50_waist_TEST.json'

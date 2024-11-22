@@ -5,6 +5,7 @@ import math
 import torch
 import torch.nn.functional as F
 from torch import nn
+from functools import partial
 
 from timm.models.layers import DropPath
 from timm.models.layers.helpers import to_2tuple
@@ -526,42 +527,9 @@ class PatchEmbedding(nn.Module):
         x = self.value_embedding(x)
         return self.dropout(x), n_vars
 
-# class CLSHead(nn.Module):
-#     '''
-#     hard to train
-#     '''
-#     def __init__(self, d_model, head_dropout=0):
-#         super().__init__()
-#         d_mid = d_model
-#         self.proj_in = nn.Linear(d_model, d_mid)
-#         self.cross_att = CrossAttention(d_mid)
-
-#         self.mlp = MLPBlock(dim=d_mid, mlp_ratio=8, mlp_layer=Mlp,
-#                             proj_drop=head_dropout, init_values=None, drop_path=0.0,
-#                             act_layer=nn.GELU, norm_layer=nn.LayerNorm,
-#                             prefix_token_length=None)
-
-#     def forward(self, x, category_token=None, return_feature=False):
-#         category_token = category_token.to(x.device)
-#         x = self.proj_in(x)
-#         B, V, L, C = x.shape
-#         x = x.view(-1, L, C)
-#         cls_token = x[:, -1:]
-#         cls_token = self.cross_att(x, query=cls_token)
-#         cls_token = cls_token.reshape(B, V, -1, C)
-
-#         cls_token = self.mlp(cls_token)
-#         if return_feature:
-#             return cls_token
-#         m = category_token.shape[2]
-#         cls_token = cls_token.expand(B, V, m, C)
-#         distance = torch.einsum('nvkc,nvmc->nvm', cls_token, category_token)
-
-#         distance = distance.mean(dim=1)
-#         return distance
 
 class CLSHead(nn.Module):
-    def __init__(self, d_model, num_classes=7, head_dropout=0):
+    def __init__(self, d_model, head_dropout=0):
         super().__init__()
         d_mid = d_model
         self.proj_in = nn.Linear(d_model, d_mid)
@@ -571,139 +539,70 @@ class CLSHead(nn.Module):
                             proj_drop=head_dropout, init_values=None, drop_path=0.0,
                             act_layer=nn.GELU, norm_layer=nn.LayerNorm,
                             prefix_token_length=None)
-        
-        self.classifier = nn.Linear(d_mid, num_classes)
 
     def forward(self, x, category_token=None, return_feature=False):
         x = self.proj_in(x)
         B, V, L, C = x.shape
-        x = x.view(-1, L, C)
+        x = x.view(-1, L, C) # [B*V, L, C]
         cls_token = x[:, -1:] # [B*V, 1, C]
         cls_token = self.cross_att(x, query=cls_token) # [B*V, 1, C]
         cls_token = cls_token.reshape(B, V, -1, C) # [B, V, 1, C]
 
-        cls_token = self.mlp(cls_token) # [B, V, 1, C]
+        cls_token = self.mlp(cls_token)
         if return_feature:
             return cls_token
-        cls_token = cls_token.squeeze(2)  # Remove the singleton dimension: [B, V, C]
-        cls_token = cls_token.mean(dim=1)  # Average over V dimension: [B, C]
-        
-        # Apply the classifier to get class logits
-        logits = self.classifier(cls_token)  # [B, num_classes]
-        return logits
+        m = category_token.shape[2]
+        cls_token = cls_token.expand(B, V, m, C)
+        distance = torch.einsum('nvkc,nvmc->nvm', cls_token, category_token)
 
-class ForecastHead(nn.Module):
-    def __init__(self, d_model, patch_len, stride, pad, head_dropout=0, prefix_token_length=None):
-        super().__init__()
-        d_mid = d_model
-        self.proj_in = nn.Linear(d_model, d_mid)
-        self.mlp = Mlp(
-            in_features=d_model,
-            hidden_features=int(d_model * 4),
-            act_layer=nn.GELU,
-            drop=head_dropout,
-        )
-        self.proj_out = nn.Linear(d_model, patch_len)
-        self.pad = pad
-        self.patch_len = patch_len
-        self.stride = stride
-        self.pos_proj = DynamicLinear(
-            in_features=128, out_features=128, fixed_in=prefix_token_length)
-
-    def forward(self, x_full, pred_len, token_len):
-        x_full = self.proj_in(x_full)
-        x_pred = x_full[:, :, -token_len:]
-        x = x_full.transpose(-1, -2)
-        x = self.pos_proj(x, token_len)
-        x = x.transpose(-1, -2)
-        x = x + x_pred
-        x = self.mlp(x)
-        x = self.proj_out(x)
-
-        bs, n_vars = x.shape[0], x.shape[1]
-        x = x.reshape(-1, x.shape[-2], x.shape[-1])
-        x = x.permute(0, 2, 1)
-        x = torch.nn.functional.fold(x, output_size=(
-            pred_len, 1), kernel_size=(self.patch_len, 1), stride=(self.stride, 1))
-        x = x.squeeze(dim=-1)
-        x = x.reshape(bs, n_vars, -1)
-        x = x.permute(0, 2, 1)
-        return x
+        distance = distance.mean(dim=1)
+        return distance
 
 
-class Model(nn.Module):
+class UniTS(nn.Module):
     """
     UniTS: Building a Unified Time Series Model
     """
-
-    def __init__(self, configs):
+    def __init__(self, 
+                 enc_in, num_class, 
+                 prompt_num=10,
+                 d_model=128, stride=16, 
+                 patch_len=16, dropout=0.1, 
+                 e_layers=30, n_heads=8
+                ):
         super().__init__()
-        self.configs = configs
-        self.task_name = configs.task_name
-        self.seq_len = configs.seq_len
-        self.label_len = configs.label_len
-        self.pred_len = configs.pred_len
 
-        # prompt
+        self.prompt_tokens = nn.Parameter(torch.zeros(1, enc_in, prompt_num, d_model))
+        nn.init.normal_(self.prompt_tokens, std=0.02)
 
-        self.prompt_tokens = torch.zeros(
-            1, configs.enc_in, configs.prompt_num, configs.d_model)
-        torch.nn.init.normal_(
-            self.prompt_tokens, std=.02)
-        self.mask_tokens = torch.zeros(
-            1, configs.enc_in, 1, configs.d_model)
+        self.category_tokens = nn.Parameter(torch.zeros(1, enc_in, num_class, d_model))
+        nn.init.normal_(self.category_tokens, std=0.02)
 
-        if self.task_name == 'classification': # only classification
-            self.category_tokens = torch.zeros(
-                1, configs.enc_in, configs.num_class, configs.d_model)
-            torch.nn.init.normal_(
-                self.category_tokens, std=.02)
-            self.cls_tokens = torch.zeros(
-                1, configs.enc_in, 1, configs.d_model)
-            torch.nn.init.normal_(self.cls_tokens, std=.02)
-
-        if self.task_name == 'classification':
-            self.cls_nums = configs.num_class
-        elif self.task_name == 'long_term_forecast':
-            remainder = configs.seq_len % configs.patch_len
-            if remainder == 0:
-                padding = 0
-            else:
-                padding = configs.patch_len - remainder
-            input_token_len = calculate_unfold_output_length(
-                configs.seq_len+padding, configs.stride, configs.patch_len)
-            input_pad = configs.stride * \
-                (input_token_len - 1) + configs.patch_len - \
-                configs.seq_len
-            pred_token_len = calculate_unfold_output_length(
-                configs.pred_len-input_pad, configs.stride, configs.patch_len)
-            real_len = configs.seq_len + configs.pred_len
-            self.cls_nums = [pred_token_len, configs.pred_len, real_len]
+        self.cls_tokens = nn.Parameter(torch.zeros(1, enc_in, 1, d_model))
+        nn.init.normal_(self.cls_tokens, std=0.02)
 
         ### model settings ###
-        self.prompt_num = configs.prompt_num
-        self.stride = configs.stride
-        self.pad = configs.stride
-        self.patch_len = configs.patch_len
+        self.d_model = d_model
+        self.prompt_num = prompt_num
+        self.stride = stride
+        self.pad = stride
+        self.patch_len = patch_len
 
         # input processing
         self.patch_embeddings = PatchEmbedding(
-            configs.d_model, configs.patch_len, configs.stride, configs.stride, configs.dropout)
-        self.position_embedding = LearnablePositionalEmbedding(configs.d_model)
-        self.prompt2forecat = DynamicLinear(128, 128, fixed_in=configs.prompt_num)
+            d_model, patch_len, stride, stride, dropout)
+        self.position_embedding = LearnablePositionalEmbedding(d_model)
+        self.prompt2forecat = DynamicLinear(128, 128, fixed_in=prompt_num)
 
         # basic blocks
-        self.block_num = configs.e_layers
+        self.block_num = e_layers
         self.blocks = nn.ModuleList(
-            [BasicBlock(dim=configs.d_model, num_heads=configs.n_heads, qkv_bias=False, qk_norm=False,
-                        mlp_ratio=8., proj_drop=configs.dropout, attn_drop=0., drop_path=0.,
-                        init_values=None, prefix_token_length=configs.prompt_num) for l in range(configs.e_layers)]
+            [BasicBlock(dim=d_model, num_heads=n_heads, qkv_bias=False, qk_norm=False,
+                        mlp_ratio=8., proj_drop=dropout, attn_drop=0., drop_path=0.,
+                        init_values=None, prefix_token_length=prompt_num) for l in range(e_layers)]
         )
 
-        # output processing
-        self.cls_head = CLSHead(configs.d_model, head_dropout=configs.dropout)
-        self.forecast_head = ForecastHead(
-            configs.d_model, configs.patch_len, configs.stride, configs.stride, prefix_token_length=configs.prompt_num, head_dropout=configs.dropout)
+        self.head = CLSHead(d_model, head_dropout=dropout)
 
     def tokenize(self, x, mask=None):
         # Normalization from Non-stationary Transformer
@@ -717,10 +616,9 @@ class Model(nn.Module):
         else:
             stdev = torch.sqrt(
                 torch.var(x, dim=1, keepdim=True, unbiased=False) + 1e-5)
-        if self.task_name == 'classification':
-            x = x + means # for classification, the input is normalized
-        else:
-            x /= stdev
+        # for classification, the input is normalized
+        x = x + means
+
         x = x.permute(0, 2, 1)
         remainder = x.shape[2] % self.patch_len
         if remainder != 0:
@@ -731,58 +629,17 @@ class Model(nn.Module):
         x, n_vars = self.patch_embeddings(x)
         return x, means, stdev, n_vars, padding
 
-    def prepare_prompt(self, x, n_vars, prefix_prompt, task_prompt, task_prompt_num, task_name=None, mask=None):
+    def prepare_prompt(self, x, n_vars, prefix_prompt, task_prompt):
         x = torch.reshape(
             x, (-1, n_vars, x.shape[-2], x.shape[-1]))
         # append prompt tokens
         this_prompt = prefix_prompt.repeat(x.shape[0], 1, 1, 1)
 
-        if task_name == 'forecast':
-            this_mask_prompt = task_prompt.repeat(
-                x.shape[0], 1, task_prompt_num, 1)
-            init_full_input = torch.cat(
-                (this_prompt, x, this_mask_prompt), dim=-2)
-            init_mask_prompt = self.prompt2forecat(init_full_input.transpose(
-                -1, -2), init_full_input.shape[2]-prefix_prompt.shape[2]).transpose(-1, -2)
-            this_function_prompt = init_mask_prompt[:, :, -task_prompt_num:]
-            x = torch.cat((this_prompt, x, this_function_prompt), dim=2)
-            x[:, :, self.prompt_num:] = x[:, :, self.prompt_num:] + \
-                self.position_embedding(x[:, :, self.prompt_num:])
-        elif task_name == 'classification':
-            this_function_prompt = task_prompt.repeat(x.shape[0], 1, 1, 1)
-            x = x + self.position_embedding(x)
-            x = torch.cat((this_prompt, x, this_function_prompt), dim=2)
-        elif task_name == 'imputation':
-            # fill the masked parts with mask tokens
-            # for imputation, masked is 0, unmasked is 1, so here to reverse mask
-            mask = 1-mask
-            mask = mask.permute(0, 2, 1)
-            mask = self.mark2token(mask)
-            mask_repeat = mask.unsqueeze(dim=-1)
-
-            mask_token = task_prompt
-            mask_repeat = mask_repeat.repeat(1, 1, 1, x.shape[-1])
-            x = x * (1-mask_repeat) + mask_token * mask_repeat
-
-            init_full_input = torch.cat((this_prompt, x), dim=-2)
-            init_mask_prompt = self.prompt2forecat(
-                init_full_input.transpose(-1, -2), x.shape[2]).transpose(-1, -2)
-            # keep the unmasked tokens and fill the masked ones with init_mask_prompt.
-            x = x * (1-mask_repeat) + init_mask_prompt * mask_repeat
-            x = x + self.position_embedding(x)
-            x = torch.cat((this_prompt, x), dim=2)
-        elif task_name == 'anomaly_detection':
-            x = x + self.position_embedding(x)
-            x = torch.cat((this_prompt, x), dim=2)
+        this_function_prompt = task_prompt.repeat(x.shape[0], 1, 1, 1)
+        x = x + self.position_embedding(x)
+        x = torch.cat((this_prompt, x, this_function_prompt), dim=2)
 
         return x
-
-    def mark2token(self, x_mark):
-        x_mark = x_mark.unfold(
-            dimension=-1, size=self.patch_len, step=self.stride)
-        x_mark = x_mark.mean(dim=-1)
-        x_mark = (x_mark > 0).float()
-        return x_mark
 
     def backbone(self, x, prefix_len, seq_len):
         attn_mask = None
@@ -791,195 +648,25 @@ class Model(nn.Module):
                       seq_len, attn_mask=attn_mask)
         return x
 
-    def forecast(self, x, x_mark):
+    def forward(self, x):
         prefix_prompt = self.prompt_tokens
-        task_prompt = self.mask_tokens
-        task_prompt_num = self.cls_nums[0]
-        task_seq_num = self.cls_nums[1]
-        real_seq_len = self.cls_nums[2]
-
-        x, means, stdev, n_vars, _ = self.tokenize(x)
-
-        x = self.prepare_prompt(
-            x, n_vars, prefix_prompt, task_prompt, task_prompt_num, task_name='forecast')
-
-        seq_token_len = x.shape[-2]-prefix_prompt.shape[2]
-        x = self.backbone(x, prefix_prompt.shape[2], seq_token_len)
-
-        x = self.forecast_head(
-            x, real_seq_len, seq_token_len)
-        x = x[:, -task_seq_num:]
-
-        # De-Normalization from Non-stationary Transformer
-        x = x * (stdev[:, 0, :].unsqueeze(1).repeat(1, x.shape[1], 1))
-        x = x + (means[:, 0, :].unsqueeze(1).repeat(1, x.shape[1], 1))
-
-        return x
-
-    def classification(self, x, x_mark):
-        prefix_prompt = self.prompt_tokens.to(x.device)
-        task_prompt = self.cls_tokens.to(x.device)
-        task_prompt_num = 1
+        task_prompt = self.cls_tokens
         category_token = self.category_tokens
-
         x, means, stdev, n_vars, _ = self.tokenize(x)
 
         seq_len = x.shape[-2]
 
         x = self.prepare_prompt(
-            x, n_vars, prefix_prompt, task_prompt, task_prompt_num, task_name='classification')
+            x, n_vars, prefix_prompt, task_prompt)
 
-        x = self.backbone(x, prefix_prompt.shape[2], seq_len)
+        x = self.backbone(x, prefix_prompt.shape[2], seq_len) # [B, V, L, C]
 
-        x = self.cls_head(x, category_token)
-
-        return x
-
-    def imputation(self, x, x_mark, mask):
-        prefix_prompt = self.prompt_tokens
-        task_prompt = self.mask_tokens
-
-        seq_len = x.shape[1]
-        x, means, stdev, n_vars, padding = self.tokenize(x, mask)
-
-        x = self.prepare_prompt(
-            x, n_vars, prefix_prompt, task_prompt, None, mask=mask, task_name='imputation')
-        seq_token_len = x.shape[-2]-prefix_prompt.shape[2]
-        x = self.backbone(x, prefix_prompt.shape[2], seq_token_len)
-
-        x = self.forecast_head(
-            x, seq_len+padding, seq_token_len)
-        x = x[:, :seq_len]
-
-        # De-Normalization from Non-stationary Transformer
-        x = x * (stdev[:, 0, :].unsqueeze(1).repeat(1, x.shape[1], 1))
-        x = x + (means[:, 0, :].unsqueeze(1).repeat(1, x.shape[1], 1))
+        x = self.head(x, category_token) # [B, V, 1, C]
 
         return x
-
-    def anomaly_detection(self, x, x_mark):
-        prefix_prompt = self.prompt_tokens
-
-        seq_len = x.shape[1]
-        x, means, stdev, n_vars, padding = self.tokenize(x)
-
-        x = self.prepare_prompt(x, n_vars, prefix_prompt,
-                                None, None, task_name='anomaly_detection')
-        seq_token_len = x.shape[-2]-prefix_prompt.shape[2]
-        x = self.backbone(x, prefix_prompt.shape[2], seq_token_len)
-
-        x = self.forecast_head(
-            x, seq_len+padding, seq_token_len)
-        x = x[:, :seq_len]
-
-        # De-Normalization from Non-stationary Transformer
-        x = x * (stdev[:, 0, :].unsqueeze(1).repeat(1, x.shape[1], 1))
-        x = x + (means[:, 0, :].unsqueeze(1).repeat(1, x.shape[1], 1))
-
-        return x
-
-    def random_masking(self, x, min_mask_ratio, max_mask_ratio):
-        """
-        Perform per-sample random masking.
-        """
-        N, V, L, D = x.shape  # batch, var, length, dim
-
-        # Calculate mask ratios and lengths to keep for each sample in the batch
-        mask_ratios = torch.rand(N, device=x.device) * \
-            (max_mask_ratio - min_mask_ratio) + min_mask_ratio
-        len_keeps = (L * (1 - mask_ratios)).long()
-
-        noise = torch.rand(N, L, device=x.device)  # noise in [0, 1]
-
-        # sort noise for each sample
-        # ascend: small is keep, large is remove
-        ids_shuffle = torch.argsort(noise, dim=1)
-        ids_restore = torch.argsort(ids_shuffle, dim=1)
-
-        # generate the binary mask: 0 is keep, 1 is remove
-        mask = torch.ones([N, L], device=x.device)
-
-        # Create a range tensor and compare with len_keeps for mask generation
-        range_tensor = torch.arange(L, device=x.device).expand(N, L)
-        mask = (range_tensor >= len_keeps.unsqueeze(1))
-
-        # unshuffle to get the binary mask
-        mask = torch.gather(mask, dim=1, index=ids_restore)
-        mask = mask.float()
-
-        return mask
-
-    def right_masking(self, x, min_mask_ratio, max_mask_ratio):
-        N, V, L, D = x.shape  # batch, var, length, dim
-
-        # Randomly choose a mask ratio for each sample within the specified range
-        mask_ratios = torch.rand(N, device=x.device) * \
-            (max_mask_ratio - min_mask_ratio) + min_mask_ratio
-        len_keeps = (L * (1 - mask_ratios)).long()
-
-        # Binary mask creation without a for loop
-        len_keeps_matrix = len_keeps.unsqueeze(1).expand(N, L)
-        indices = torch.arange(L, device=x.device).expand_as(len_keeps_matrix)
-        mask = indices >= len_keeps_matrix
-        mask = mask.float()
-
-        return mask
-
-    def choose_masking(self, x, right_prob, min_mask_ratio, max_mask_ratio):
-        # Generate a random number to decide which masking function to use
-        if torch.rand(1).item() > right_prob:
-            return self.random_masking(x, min_mask_ratio, max_mask_ratio)
-        else:
-            return self.right_masking(x, min_mask_ratio, max_mask_ratio)
-
-    def get_mask_seq(self, mask, seq_len):
-        mask_seq = mask.unsqueeze(dim=-1).repeat(1, 1, self.patch_len)
-        mask_seq = mask_seq.permute(0, 2, 1)
-        mask_seq = mask_seq.masked_fill(mask_seq == 0, -1e9)
-        # Fold operation
-        mask_seq = torch.nn.functional.fold(mask_seq, output_size=(
-            seq_len, 1), kernel_size=(self.patch_len, 1), stride=(self.stride, 1))
-        # Apply threshold to bring back to 0/1 values
-        mask_seq = (mask_seq > 0).float()
-        mask_seq = mask_seq.squeeze(dim=-1).squeeze(dim=1)
-        return mask_seq
-
-    def forward(self, x_enc, x_mark_enc=None, x_dec=None, x_mark_dec=None, mask=None):
-        task_name = self.task_name
-        if task_name == 'long_term_forecast' or task_name == 'short_term_forecast':
-            dec_out = self.forecast(x_enc, x_mark_enc)
-            return dec_out  # [B, L, D]
-        if task_name == 'imputation':
-            dec_out = self.imputation(
-                x_enc, x_mark_enc, mask)
-            return dec_out  # [B, L, D]
-        if task_name == 'anomaly_detection':
-            dec_out = self.anomaly_detection(x_enc, x_mark_enc)
-            return dec_out  # [B, L, D]
-        if task_name == 'classification':
-            dec_out = self.classification(x_enc, x_mark_enc)
-            return dec_out  # [B, N]
-        return None
-
-@dataclass
-class ModelArgs():
-    prompt_num: int = 10
-    patch_len: int = 16
-    stride: int = 16
-    e_layers: int = 3
-    d_model: int = 128
-    n_heads: int = 8
-    dropout: float = 0.1
-
-    task_name: str = 'classification'
-    num_class: int = 7
-    enc_in: int = 6
-    seq_len: int = 256
-    label_len: int = 1
-    pred_len: int = 0
 
 if __name__ == '__main__':
-    model = Model(ModelArgs())
-    x = torch.randn(1, 200, 6)
+    model = UniTS(enc_in=6, num_class=7)
+    x = torch.randn(1, 100, 6)
     y = model(x)
     print(y.shape)

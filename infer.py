@@ -6,17 +6,18 @@ import yaml
 from tqdm import tqdm
 import torch
 from plot import plot
+from transformers import AutoConfig
 
-from models.limu import Model, ModelArgs
+from models.chronos import Chronos
 
 # os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 device = 'cuda'
 
-load_path = f'/data/wjdu/multi/LIMU_HEAD/'
-save_path = f'/data/wjdu/multi/ds/'
+load_path = f'/data/wjdu/multi/expr/LM_HEAD/checkpoint-23.pth'
+save_path = f'/data/wjdu/multi/expr/res'
 
 num_class = 7
-config_paths = ["data/config_c.yaml"]
+config_paths = ["data/config.yaml"]
 
 os.makedirs(save_path, exist_ok=True)
 
@@ -177,11 +178,17 @@ def infer(config_path, model):
         
         with torch.no_grad():
             for data in tqdm(data_item, desc=f"Testing ..."):
-                imu_input = torch.tensor(data['imu_input'], dtype=torch.float32)
+                imu_input = torch.tensor(data['imu_input'], dtype=torch.float32).unsqueeze(0)
                 label = mapping[data['output']] # an integer
 
-                imu_input = imu_input.unsqueeze(0).to(device, non_blocking=True)
-                output = model(imu_input)
+                tokenizer = model.tokenizer
+                N, L, V = imu_input.shape
+                imu_input = imu_input.permute(0, 2, 1).reshape(N*V, L)
+                input_ids, mask, _ = tokenizer.context_input_transform(imu_input)
+                input_ids = input_ids.reshape(N, V, -1).to(device, non_blocking=True)
+                mask = mask.to(device, non_blocking=True)
+
+                output = model(input_ids, mask)
 
                 # Calculate accuracy
                 _, pred_index = torch.max(output, 1)
@@ -202,8 +209,10 @@ def infer(config_path, model):
 
 if __name__ == '__main__':
     # define the model
-    model_args = ModelArgs()
-    model = Model(model_args)
+    config = AutoConfig.from_pretrained(
+        "amazon/chronos-t5-small",
+    )
+    model = Chronos(7, config)
     if not load_path.endswith('.pth'):
         best_epoch = json.load(open(os.path.join(load_path, 'best.json')))['best_epoch']
         load_path = os.path.join(load_path, f'checkpoint-{best_epoch}.pth')

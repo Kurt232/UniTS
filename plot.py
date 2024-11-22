@@ -58,5 +58,6 @@ if __name__ == '__main__':
     dirs = [d for d in os.listdir(root) if os.path.isdir(os.path.join(root, d))]
     for d in dirs:
         path = os.path.join(root, d)
-        print(path)
-        plot(path)
+        if 'HEAD' in path:
+            print(path)
+            plot(path)

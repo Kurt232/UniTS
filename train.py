@@ -20,7 +20,8 @@ import util.misc as misc
 import util.lr_sched as lr_sched
 from util.misc import NativeScalerWithGradNormCount as NativeScaler
 
-from models.limu import Model, ModelArgs
+from models.chronos import Chronos
+from transformers import AutoConfig
 
 num_class = 7
 class Dataset(Dataset):
@@ -86,10 +87,15 @@ def train_one_epoch(model: nn.Module,
             lr_sched.adjust_learning_rate(optimizer, data_iter_step / len(data_loader) + epoch, args)
 
         criterion = torch.nn.CrossEntropyLoss()
-        imu_input = imu_input.to(device, non_blocking=True)
+        tokenizer = model.module.tokenizer
+        N, L, V = imu_input.shape
+        imu_input = imu_input.permute(0, 2, 1).reshape(N*V, L)
+        input_ids, mask, _ = tokenizer.context_input_transform(imu_input)
+        input_ids = input_ids.reshape(N, V, -1).to(device, non_blocking=True)
+        mask = mask.to(device, non_blocking=True)
         label = label.to(device, non_blocking=True)
         with torch.cuda.amp.autocast():
-            output = model(imu_input)
+            output = model(input_ids, mask)
             c_loss = criterion(output, label.long().squeeze(-1))
 
         # Calculate accuracy
@@ -214,19 +220,24 @@ def evaluate(model, data_loader, device, epoch, args=None, is_test=False):
 
     with torch.no_grad():
         for batch in metric_logger.log_every(data_loader, 10, header):
-            targets, images = batch
-            images = images.to(device, non_blocking=True)
-            targets = targets.to(device, non_blocking=True)
+            label, imu_input= batch
+            tokenizer = model.module.tokenizer
+            N, L, V = imu_input.shape
+            imu_input = imu_input.permute(0, 2, 1).reshape(N*V, L)
+            input_ids, mask, _ = tokenizer.context_input_transform(imu_input)
+            input_ids = input_ids.reshape(N, V, -1).to(device, non_blocking=True)
+            mask = mask.to(device, non_blocking=True)
+            label = label.to(device, non_blocking=True)
 
             # Compute output
-            outputs = model(images)
-            loss = criterion(outputs, targets.long().squeeze(-1))
+            outputs = model(input_ids, mask)
+            loss = criterion(outputs, label.long().squeeze(-1))
 
             # Measure accuracy
             _, preds = torch.max(outputs, 1) # output: [B, 8]
-            label_indices = targets.view(-1) # label: [B, 1]
+            label_indices = label.view(-1) # label: [B, 1]
             correct += (preds == label_indices).sum().item()
-            total += targets.size(0)
+            total += label.size(0)
 
             # Update metrics
             metric_logger.update(loss=loss.item())
@@ -256,17 +267,22 @@ def main(args):
     np.random.seed(seed)
     cudnn.benchmark = True
 
-    model_args = ModelArgs()
+    chronos_name = "amazon/chronos-t5-small"
+
     log_args = {
         'time': datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S"),
-        'model_args': model_args.__dict__,
+        'model_args': chronos_name,
         'train_args': vars(args),
     }
     with open(os.path.join(args.output_dir, "args.json"), mode="w", encoding="utf-8") as f:
         f.write(json.dumps(log_args, indent=4) + "\n")
 
     # Define the model
-    model = Model(model_args)
+    config = AutoConfig.from_pretrained(
+        chronos_name,
+    )
+    model = Chronos(7, config)
+
     load_path = args.load_path
     if load_path is not None and os.path.exists(load_path):
         print(f"Loading model from {load_path}")
