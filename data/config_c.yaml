@@ -1,5 +1,7 @@
 TEST:
-    - '/data/wjdu/dataset/ds/domino_20_thigh_TEST.json'
-    - '/data/wjdu/dataset/ds/wisdm_20_thigh_TEST.json'
-    - '/data/wjdu/dataset/ds/hhar_20_waist_TEST.json'
-    - '/data/wjdu/dataset/ds/ucihar_20_waist_TEST.json'
+    - '/data/wjdu/unihar/data/motion_90_thigh_TRAIN.json'
+    - '/data/wjdu/unihar/data/hhar_90_thigh_TRAIN.json'
+    - '/data/wjdu/unihar/data/ucihar_90_thigh_TRAIN.json'
+    - '/data/wjdu/unihar/data/motion_10_thigh_TEST.json'
+    - '/data/wjdu/unihar/data/hhar_10_thigh_TEST.json'
+    - '/data/wjdu/unihar/data/ucihar_10_thigh_TEST.json'

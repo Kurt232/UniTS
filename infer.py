@@ -12,8 +12,8 @@ from models.units import UniTS
 # os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 device = 'cuda'
 
-load_path = f'/data/wjdu/multi/output/UniTS_HEAD'
-save_path = f'/data/wjdu/multi/ds'
+load_path = f'/data/wjdu/unihar/S/UniTS_HEAD/'
+save_path = f'/data/wjdu/unihar/all/S'
 
 num_class = 7
 config_paths = ["data/config_c.yaml"]
@@ -195,10 +195,14 @@ def infer(config_path, model):
         json.dump(predictions, open(prediction_file, 'w'), indent=2)
 
         print(f"{result_file} ", "Accuracy: {:.4f}%".format(correct_pred / len(data_item) * 100))
-        acc_total[result_file] = correct_pred / len(data_item)
+        acc_total[result_file] = (correct_pred / len(data_item), len(data_item))
 
         eval(prediction_file)
     print(json.dumps(acc_total, indent=2))
+    # weight acc
+    total = sum([acc * num for acc, num in acc_total.values()])
+    total_num = sum([num for acc, num in acc_total.values()])
+    print(f"Total Accuracy: {total / total_num * 100:.4f}%")
 
 if __name__ == '__main__':
     # define the model

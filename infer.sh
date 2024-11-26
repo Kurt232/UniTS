@@ -1,2 +1,2 @@
 #!/bin/bash
-CUDA_VISIBLE_DEVICES=1 python infer.py
+CUDA_VISIBLE_DEVICES=4 python infer.py
