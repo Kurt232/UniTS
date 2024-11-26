@@ -12,8 +12,8 @@ from models.units import UniTS
 # os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 device = 'cuda'
 
-load_path = f'/data/wjdu/multi/expr/UniTS_HEAD_30e'
-save_path = f'/data/wjdu/multi/expr/ds'
+load_path = f'/data/wjdu/multi/output/UniTS_HEAD'
+save_path = f'/data/wjdu/multi/ds'
 
 num_class = 7
 config_paths = ["data/config_c.yaml"]

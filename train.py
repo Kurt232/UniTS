@@ -310,7 +310,7 @@ def main(args):
     print(f"test dataset size: {len(dataset_test)}")
 
     # Split the dataset into training, validation, and test sets (80-10-10)
-    val_size = len(dataset_test) # 10% of the dataset
+    val_size = len(dataset_train) // 10
     train_size = len(dataset_train) - val_size
 
     # Ensure reproducibility across different processes

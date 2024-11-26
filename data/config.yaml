@@ -1,8 +1,8 @@
 TRAIN:
-    - '/data/wjdu/dataset/50hz_2s/motion_90_thigh_TRAIN.json'
-    - '/data/wjdu/dataset/50hz_2s/realworld_90_thigh_TRAIN.json'
-    - '/data/wjdu/dataset/50hz_2s/shoaib_90_thigh_TRAIN.json'
-    - '/data/wjdu/dataset/50hz_2s/uschar_90_thigh_TRAIN.json'
+    - '/data/wjdu/datasetb/50hz_2s/motion_90_thigh_B_MAX.json'
+    - '/data/wjdu/datasetb/50hz_2s/realworld_90_thigh_B_MAX.json'
+    - '/data/wjdu/datasetb/50hz_2s/shoaib_90_thigh_B_MAX.json'
+    - '/data/wjdu/datasetb/50hz_2s/uschar_90_thigh_B_MAX.json'
 
 TEST:
     - '/data/wjdu/dataset/50hz_2s/motion_10_thigh_TEST.json'
