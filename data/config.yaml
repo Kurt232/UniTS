@@ -1,3 +1,9 @@
+# TRAIN:
+#     - '/data/wjdu/unihar/data/hhar_90_thigh_TRAIN.json'
+
+# TEST:
+#     - '/data/wjdu/unihar/data/hhar_10_thigh_TEST.json'
+
 TRAIN:
     - '/data/wjdu/unihar/data/shoaib_90_thigh_TRAIN.json'
 

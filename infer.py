@@ -6,17 +6,33 @@ import yaml
 from tqdm import tqdm
 import torch
 from plot import plot
+import argparse
 
 from models.units import UniTS
 
-# os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+def get_args_parser():
+    parser = argparse.ArgumentParser('inference', add_help=False)
+    # Model parameters
+    parser.add_argument('-l', '--load_path', default=None, type=str,
+                        help='path to load pretrained model')
+
+    # Dataset parameters
+    parser.add_argument('-d', '--data_config', nargs='+', default=None,
+                        help='dataset config path')
+
+    parser.add_argument('-o', '--output_dir', default=None,
+                        help='path where to save, empty for no saving')
+
+    return parser
+
+args = get_args_parser().parse_args()
 device = 'cuda'
 
-load_path = f'/data/wjdu/unihar/S/UniTS_HEAD/'
-save_path = f'/data/wjdu/unihar/all/S'
+load_path = args.load_path
+save_path = args.output_dir
 
 num_class = 7
-config_paths = ["data/config_c.yaml"]
+config_paths = args.data_config
 
 os.makedirs(save_path, exist_ok=True)
 
@@ -171,6 +187,7 @@ def infer(config_path, model):
     _mapping = {v: k for k, v in mapping.items()}
 
     acc_total = {}
+    num_total = {}
     for data_item, data_path in zip(data_list, test_paths):
         predictions = []
         correct_pred = 0
@@ -195,13 +212,15 @@ def infer(config_path, model):
         json.dump(predictions, open(prediction_file, 'w'), indent=2)
 
         print(f"{result_file} ", "Accuracy: {:.4f}%".format(correct_pred / len(data_item) * 100))
-        acc_total[result_file] = (correct_pred / len(data_item), len(data_item))
+        acc_total[result_file] = correct_pred / len(data_item)
+        num_total[result_file] = len(data_item)
 
         eval(prediction_file)
-    print(json.dumps(acc_total, indent=2))
+    print(json.dumps(acc_total, indent=2, sort_keys=True))
+    print(json.dumps(num_total, indent=2, sort_keys=True))
     # weight acc
-    total = sum([acc * num for acc, num in acc_total.values()])
-    total_num = sum([num for acc, num in acc_total.values()])
+    total = sum([acc_total[k] * num_total[k] for k in acc_total.keys()])
+    total_num = sum(num_total.values())
     print(f"Total Accuracy: {total / total_num * 100:.4f}%")
 
 if __name__ == '__main__':

@@ -1,7 +1,13 @@
 TEST:
-    - '/data/wjdu/unihar/data/motion_90_thigh_TRAIN.json'
-    - '/data/wjdu/unihar/data/hhar_90_thigh_TRAIN.json'
-    - '/data/wjdu/unihar/data/ucihar_90_thigh_TRAIN.json'
-    - '/data/wjdu/unihar/data/motion_10_thigh_TEST.json'
     - '/data/wjdu/unihar/data/hhar_10_thigh_TEST.json'
+    - '/data/wjdu/unihar/data/motion_10_thigh_TEST.json'
+    - '/data/wjdu/unihar/data/shoaib_10_thigh_TEST.json'
     - '/data/wjdu/unihar/data/ucihar_10_thigh_TEST.json'
+
+# TEST:
+#     - '/data/wjdu/unihar/data/motion_90_thigh_TRAIN.json'
+#     - '/data/wjdu/unihar/data/hhar_90_thigh_TRAIN.json'
+#     - '/data/wjdu/unihar/data/ucihar_90_thigh_TRAIN.json'
+#     - '/data/wjdu/unihar/data/motion_10_thigh_TEST.json'
+#     - '/data/wjdu/unihar/data/hhar_10_thigh_TEST.json'
+#     - '/data/wjdu/unihar/data/ucihar_10_thigh_TEST.json'

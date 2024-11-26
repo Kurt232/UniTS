@@ -1,35 +1,17 @@
 #!/usr/bin/env bash
+set -e  # Exit immediately if a command exits with a non-zero status
 
-# Get all JSON configuration files in the "./configs" directory
-MODEL_CONFIGS=(./configs/*.json)
-DATA_CONFIG="/data/wjdu/data4/realworld/realworld_80_thigh_TRAIN.json /data/wjdu/data4/realworld/realworld_10_thigh_TEST.json"
-OUTPUT_DIR="/data/wjdu/TST_HEAD_80"
-MASTER_PORT_BASE=2112
+GPU=4,5,6,7
+MASTER_PORT=2433
+FLAG="a5_p"
 
-# Specify the GPUs to use
-GPUS=(4 5 6 7)  # Adjust this based on available GPUs
-NUM_GPUS=${#GPUS[@]}
+for DS in h m u s; do
+    OUTPUT_DIR="/data/wjdu/unihar/res/${FLAG}/${DS}/"
+    TRAIN_DIR="/data/wjdu/unihar/${FLAG}/${DS}/UniTS_HEAD"
+    YAML_FILE="data/${DS}_p.yaml"
 
-# Estimated training time in hours per job (adjust as needed)
-ESTIMATED_TRAINING_TIME=0.5
-
-for i in "${!MODEL_CONFIGS[@]}"; do
-    MODEL_CONFIG="${MODEL_CONFIGS[$i]}"
-    MASTER_PORT=$((MASTER_PORT_BASE + i))
-    GPU_INDEX=$((i % NUM_GPUS))
-    GPU=${GPUS[$GPU_INDEX]}  # Get the GPU index from the GPUS array
-
-    echo "Starting training with config: $MODEL_CONFIG on GPU: $GPU"
-
-    # Run the training script
-    bash train.sh "$GPU" "$MODEL_CONFIG" "$DATA_CONFIG" "$OUTPUT_DIR" "$MASTER_PORT" & # Run in background
-
-    # # Optional: Limit the number of concurrent jobs
-    # if (( (i + 1) % NUM_GPUS == 0 )); then
-    #     wait  # Wait for current batch of jobs to finish
-    # fi
+    bash train.sh "$GPU" "$YAML_FILE" "$TRAIN_DIR" "$MASTER_PORT"
+    mkdir -p "$OUTPUT_DIR"
+    python infer.py -l "$TRAIN_DIR" -d "$YAML_FILE" -o "$OUTPUT_DIR" > "${OUTPUT_DIR}output.log"
+    python /data/wjdu/unihar/eval.py "$OUTPUT_DIR" >> "${OUTPUT_DIR}output.log"
 done
-
-wait  # Wait for all background jobs to finish
-
-echo "All training jobs have completed."

@@ -22,9 +22,11 @@ from util.misc import NativeScalerWithGradNormCount as NativeScaler
 
 from models.units import UniTS
 
+from scipy.stats import special_ortho_group
+
 num_class = 7
 class Dataset(Dataset):
-    def __init__(self, config, is_train=True):
+    def __init__(self, config, augment_round=1, is_train=True):
 
         data_list = []
         paths = yaml.safe_load(open(config))['TRAIN' if is_train else 'TEST']
@@ -32,6 +34,25 @@ class Dataset(Dataset):
             meta_l = json.load(open(meta_path))
             print(f"{meta_path}: len {len(meta_l)}")
             data_list += meta_l
+
+        data_list += meta_l
+
+        self.sensor_dimen = 3
+        if is_train:
+            _data_list = []
+            for data in data_list:
+                _data = data.copy()
+                instance = np.array(data['imu_input'], dtype=np.float32)
+                for i in range(augment_round):
+                    instance_new = instance.copy().reshape(instance.shape[0], instance.shape[1] // self.sensor_dimen, self.sensor_dimen)
+                    rotation_matrix = special_ortho_group.rvs(self.sensor_dimen)
+                    for j in range(instance_new.shape[1]):
+                        instance_new[:, j, :] = np.dot(instance_new[:, j, :], rotation_matrix)
+                    instance_new = instance_new.reshape(instance.shape[0], instance.shape[1])
+                    _data['imu_input'] = instance_new
+                    _data_list.append(_data)
+            print(f"before data_list: {len(data_list)}")
+            data_list += _data_list
 
         self.data_list = data_list
         print(f"total length: {len(self)}")
@@ -304,9 +325,9 @@ def main(args):
     loss_scaler = NativeScaler()
 
     # Create the train dataset
-    dataset_train = Dataset(args.data_config, is_train=True)
+    dataset_train = Dataset(args.data_config, augment_round=5, is_train=True)
     print(f"train dataset size: {len(dataset_train)}")
-    dataset_test = Dataset(args.data_config, is_train=False)
+    dataset_test = Dataset(args.data_config, augment_round=0, is_train=False)
     print(f"test dataset size: {len(dataset_test)}")
 
     # Split the dataset into training, validation, and test sets (80-10-10)
@@ -439,7 +460,7 @@ def main(args):
     print('Training time {}'.format(total_time_str))
     
     if args.output_dir and misc.is_main_process():
-        with open(os.path.join(args.output_dir, "best.json"), mode="a", encoding="utf-8") as f:
+        with open(os.path.join(args.output_dir, "best.json"), mode="w", encoding="utf-8") as f:
             f.write(json.dumps({"best_epoch": best_epoch, "vali_acc": best_vali_acc, "test_acc": best_epoch_test_acc}, indent=4) + "\n")
 
 
