@@ -1,11 +1,11 @@
-# TRAIN:
-#     - '/data/wjdu/unihar/data/hhar_90_thigh_TRAIN.json'
-
-# TEST:
-#     - '/data/wjdu/unihar/data/hhar_10_thigh_TEST.json'
-
 TRAIN:
-    - '/data/wjdu/unihar/data/shoaib_90_thigh_TRAIN.json'
+    - '/data/wjdu/dataset/data/motion_90_TRAIN.json'
+    - '/data/wjdu/dataset/data/realworld_90_TRAIN.json'
+    - '/data/wjdu/dataset/data/shoaib_90_TRAIN.json'
+    - '/data/wjdu/dataset/data/uschar_90_TRAIN.json'
 
 TEST:
-    - '/data/wjdu/unihar/data/shoaib_10_thigh_TEST.json'
+    - '/data/wjdu/dataset/data/domino_10_TEST.json'
+    - '/data/wjdu/dataset/data/hhar_10_TEST.json'
+    - '/data/wjdu/dataset/data/ucihar_10_TEST.json'
+    - '/data/wjdu/dataset/data/wisdm_10_TEST.json'
