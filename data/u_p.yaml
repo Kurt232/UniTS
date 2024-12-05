@@ -1,0 +1,7 @@
+TRAIN:
+    - '/data/wjdu/unihar/pure_data/ucihar_90_TRAIN.json'
+
+TEST:
+    - '/data/wjdu/unihar/pure_data/shoaib_10_TEST.json'
+    - '/data/wjdu/unihar/pure_data/hhar_10_TEST.json'
+    - '/data/wjdu/unihar/pure_data/motion_10_TEST.json'
