@@ -1,0 +1,13 @@
+NAMA: chest-chest
+
+TRAIN:
+    LOC: 
+        - 'chest'
+    META:
+        - '/data/wjdu/benchmark/data/realworld_90_TRAIN.json'
+
+TEST:
+    LOC:
+        - 'chest'
+    META:
+        - '/data/wjdu/benchmark/data/pamap2_10_TEST.json'

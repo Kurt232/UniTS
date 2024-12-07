@@ -7,6 +7,7 @@ from tqdm import tqdm
 import torch
 from plot import plot
 import argparse
+import pandas as pd
 
 from models.units import UniTS
 
@@ -26,13 +27,15 @@ def get_args_parser():
     return parser
 
 args = get_args_parser().parse_args()
-device = 'cuda'
+device = 'cpu'
 
 load_path = args.load_path
 save_path = args.output_dir
 
 num_class = 7
 config_paths = args.data_config
+
+default_loc = ['head', 'chest', 'upperarm', 'wrist', 'waist', 'hip', 'thigh', 'shin', 'ankle']
 
 os.makedirs(save_path, exist_ok=True)
 
@@ -45,7 +48,7 @@ def eval(eval_file):
     from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
     import matplotlib.pyplot as plt
     # Configuration
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = "cpu"
     label_list = ['downstairs', 'jog', 'lie', 'sit', 'stand', 'upstairs', 'walk']
     bert_model = BertModel.from_pretrained('bert-large-uncased').to(device)
     bert_tokenizer = AutoTokenizer.from_pretrained('bert-large-uncased', model_max_length=512)
@@ -160,17 +163,22 @@ def eval(eval_file):
         with open(f"{save_base}/error_list.json", "w") as f:
             json.dump(error_list, f, indent=2)
     
-    return acc
+    return acc, 
 
 def infer(config_path, model):
     data_list = []
     print("Dataset:")
     
-    test_paths = yaml.safe_load(open(config_path))['TEST']
+    config = yaml.safe_load(open(config_path))['TEST']
+    test_paths = config['META']
+    loc = config.get('LOC', default_loc)
     for i, meta_path in enumerate(test_paths):
         print(f"\t{i}. {meta_path.split('/')[-1]}")
-        meta_l = json.load(open(meta_path))
+        df = pd.read_json(meta_path, orient='records')
+        meta_l = df[df['location'].isin(loc)].to_dict('records')
+        print(f"{meta_path}: len {len(meta_l)}")
         data_list.append(meta_l)
+        del df
     
     # mapping = {l: i for i, l in enumerate(labels)}
     ['downstairs', 'jog', 'lie', 'sit', 'stand', 'upstairs', 'walk']
@@ -222,6 +230,14 @@ def infer(config_path, model):
     total = sum([acc_total[k] * num_total[k] for k in acc_total.keys()])
     total_num = sum(num_total.values())
     print(f"Total Accuracy: {total / total_num * 100:.4f}%")
+    # dump the results
+    res = {
+        'acc_total': acc_total,
+        'num_total': num_total,
+        'avg_acc': total / total_num
+    }
+    with open(os.path.join(save_path, 'eval_res.txt'), 'w') as f:
+        json.dump(res, f, indent=2)
 
 if __name__ == '__main__':
     # define the model
@@ -242,4 +258,10 @@ if __name__ == '__main__':
 
     for c_path in config_paths:
         infer(c_path, model)
+        res = {
+            'load_path': load_path,
+            'config_path': c_path,
+        }
+        with open(os.path.join(save_path, 'config.txt'), 'w') as f:
+            json.dump(res, f, indent=2)
     print(load_path)

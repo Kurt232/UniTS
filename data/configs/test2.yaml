@@ -1,0 +1,11 @@
+TRAIN:
+    LOC:
+        - 'hip'
+    META:
+    - '/data/wjdu/benchmark/data/shoaib_90_TRAIN.json'
+
+TEST:
+    LOC:
+        - 'hip'
+    META:
+    - '/data/wjdu/benchmark/data/uschar_10_TEST.json'

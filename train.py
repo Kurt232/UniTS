@@ -6,167 +6,21 @@ import json
 import numpy as np
 import os
 import time
-import yaml
-from pathlib import Path
+
 from typing import Iterable
 
 import torch
 import torch.nn as nn
 import torch.backends.cudnn as cudnn
 from torch.utils.tensorboard import SummaryWriter
-from torch.utils.data import Dataset
 
 import util.misc as misc
-import util.lr_sched as lr_sched
 from util.misc import NativeScalerWithGradNormCount as NativeScaler
 
 from models.units import UniTS
+from data.dataset import IMUDataset
+from engine import train_one_epoch, evaluate
 
-from scipy.stats import special_ortho_group
-
-num_class = 7
-class IMUDataset(Dataset):
-    def __init__(self, config, augment_round=1, is_train=True):
-
-        data_list = []
-        paths = yaml.safe_load(open(config))['TRAIN' if is_train else 'TEST']
-        for meta_path in paths:
-            meta_l = json.load(open(meta_path))
-            print(f"{meta_path}: len {len(meta_l)}")
-            data_list += meta_l
-
-        data_list += meta_l
-
-        self.sensor_dimen = 3
-        if is_train and augment_round > 0:
-            _data_list = []
-            for data in data_list:
-                _data = data.copy()
-                instance = np.array(data['imu_input'], dtype=np.float32)
-                rotation_matrix = special_ortho_group.rvs(self.sensor_dimen, augment_round)
-                if augment_round == 1:
-                    rotation_matrix = np.expand_dims(rotation_matrix, axis=0)
-                for i in range(augment_round):
-                    instance_new = instance.copy().reshape(instance.shape[0], instance.shape[1] // self.sensor_dimen, self.sensor_dimen)
-                    for j in range(instance_new.shape[1]):
-                        instance_new[:, j, :] = np.dot(instance_new[:, j, :], rotation_matrix[i])
-                    instance_new = instance_new.reshape(instance.shape[0], instance.shape[1])
-                    _data['imu_input'] = instance_new
-                    _data_list.append(_data)
-            print(f"before data_list: {len(data_list)}")
-            data_list += _data_list
-
-        self.data_list = data_list
-        print(f"total length: {len(self)}")
-        ['downstairs', 'jog', 'lie', 'sit', 'stand', 'upstairs', 'walk']
-        self.mapping = {
-            'downstairs': 0,
-            'jog': 1,
-            'lie': 2,
-            'sit': 3,
-            'stand': 4,
-            'upstairs': 5,
-            'walk': 6
-        }
-
-    def __len__(self):
-        return len(self.data_list)
-
-    def __getitem__(self, index):
-        sample = self.data_list[index]
-        imu_data, caption = sample['imu_input'], sample['output']
-        imu_input = torch.tensor(imu_data, dtype=torch.float32)
-        assert imu_input.shape[1] == 6, f"imu_input shape: {imu_input.shape}"
-        label = torch.tensor([self.mapping[caption]], dtype=torch.int8)
-
-        return label, imu_input
-
-def train_one_epoch(model: nn.Module,
-                    data_loader: Iterable, optimizer: torch.optim.Optimizer,
-                    device: torch.device, epoch: int, loss_scaler,
-                    log_writer=None,
-                    args=None):
-    model.train(True)
-    # model.module.set_default_trainability()
-
-    metric_logger = misc.MetricLogger(delimiter="  ")
-    metric_logger.add_meter('lr', misc.SmoothedValue(window_size=1, fmt='{value:.6f}'))
-
-    header = 'Epoch: [{}]'.format(epoch)
-    print_freq = 10
-
-    correct = 0
-    total = 0
-
-    accum_iter = args.accum_iter
-
-    optimizer.zero_grad()
-    if log_writer is not None:
-        print('log_dir: {}'.format(log_writer.log_dir))
-    for data_iter_step, (label, imu_input) in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
-        # we use a per iteration (instead of per epoch) lr scheduler
-        if data_iter_step % accum_iter == 0:
-            lr_sched.adjust_learning_rate(optimizer, data_iter_step / len(data_loader) + epoch, args)
-
-        criterion = torch.nn.CrossEntropyLoss()
-        imu_input = imu_input.to(device, non_blocking=True)
-        label = label.to(device, non_blocking=True)
-        with torch.cuda.amp.autocast():
-            output = model(imu_input)
-            c_loss = criterion(output, label.long().squeeze(-1))
-
-        # Calculate accuracy
-        _, preds = torch.max(output, 1) # output: [B, 8]
-        label_indices = label.view(-1) # label: [B, 1]
-        correct += (preds == label_indices).sum().item()
-        total += label.size(0)
-        
-
-        # Loss
-        loss = c_loss
-        loss_value = loss.item()
-        c_loss_value = c_loss.item()
-        m_loss_value = c_loss
-
-        if not math.isfinite(loss_value):
-            print("Loss is {}, stopping training".format(loss_value))
-            sys.exit(1)
-
-        loss /= accum_iter
-        loss_scaler(loss, optimizer, parameters=model.parameters(),
-                    update_grad=(data_iter_step + 1) % accum_iter == 0)
-        if (data_iter_step + 1) % accum_iter == 0:
-            optimizer.zero_grad()
-
-        torch.cuda.synchronize()
-
-        metric_logger.update(closs=c_loss_value)
-        metric_logger.update(mloss=m_loss_value)
-
-        lr = optimizer.param_groups[0]["lr"]
-        metric_logger.update(lr=lr)
-
-        loss_value_reduce = misc.all_reduce_mean(loss_value)
-        c_loss_value_reduce = misc.all_reduce_mean(c_loss_value)
-        m_loss_value_reduce = misc.all_reduce_mean(m_loss_value)
-        if log_writer is not None and (data_iter_step + 1) % accum_iter == 0:
-            """ We use epoch_1000x as the x-axis in tensorboard.
-            This calibrates different curves when batch size changes.
-            """
-            epoch_1000x = int((data_iter_step / len(data_loader) + epoch) * 1000)
-            log_writer.add_scalar('c_train_loss', c_loss_value_reduce, epoch_1000x)
-            log_writer.add_scalar('m_train_loss', m_loss_value_reduce, epoch_1000x)
-            log_writer.add_scalar('lr', lr, epoch_1000x)
-
-
-    # Compute accuracy
-    accuracy = 100. * correct / total
-    metric_logger.meters['acc'].update(accuracy)
-
-    # Gather the stats from all processes
-    metric_logger.synchronize_between_processes()
-    print(f"Averaged stats for Train:", metric_logger)
-    return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
 
 def get_args_parser():
     parser = argparse.ArgumentParser('UniTS training', add_help=False)
@@ -223,50 +77,25 @@ def get_args_parser():
     parser.add_argument('--dist_on_itp', action='store_true')
     parser.add_argument('--dist_url', default='env://',
                         help='url used to set up distributed training')
-
+    
+    # train setting
+    parser.add_argument('--setting_id', default=0, type=int, help='training setting')
     return parser
 
-def evaluate(model, data_loader, device, epoch, args=None, is_test=False):
-    model.eval()
-    metric_logger = misc.MetricLogger(delimiter="  ")
-    header = f'Epoch: [{epoch}] {"Test" if is_test else "Validation"}:'
-    criterion = torch.nn.CrossEntropyLoss()
-
-    correct = 0
-    total = 0
-
-    with torch.no_grad():
-        for batch in metric_logger.log_every(data_loader, 10, header):
-            targets, images = batch
-            images = images.to(device, non_blocking=True)
-            targets = targets.to(device, non_blocking=True)
-
-            # Compute output
-            outputs = model(images)
-            loss = criterion(outputs, targets.long().squeeze(-1))
-
-            # Measure accuracy
-            _, preds = torch.max(outputs, 1) # output: [B, 8]
-            label_indices = targets.view(-1) # label: [B, 1]
-            correct += (preds == label_indices).sum().item()
-            total += targets.size(0)
-
-            # Update metrics
-            metric_logger.update(loss=loss.item())
-
-    # Compute accuracy
-    accuracy = 100. * correct / total
-    metric_logger.meters['acc'].update(accuracy)
-
-    # Gather the stats from all processes
-    metric_logger.synchronize_between_processes()
-    print(f"Averaged stats for {'Test' if is_test else 'Validation'}:", metric_logger)
-    return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
 
 def main(args):
     misc.init_distributed_mode(args)
     # args.distributed = False # debug
 
+    if args.setting_id == 1:
+        augment_round = 1
+    elif args.setting_id == 2:
+        augment_round = 2
+    elif args.setting_id == 3:
+        augment_round = 5
+    else:
+        augment_round = 0
+    
     print('job dir: {}'.format(os.path.dirname(os.path.realpath(__file__))))
     print("{}".format(args).replace(', ', ',\n'))
 
@@ -327,9 +156,9 @@ def main(args):
     loss_scaler = NativeScaler()
 
     # Create the train dataset
-    dataset_train = IMUDataset(args.data_config, augment_round=5, is_train=True)
+    dataset_train = IMUDataset(args.data_config, augment_round=augment_round, is_train=True)
     print(f"train dataset size: {len(dataset_train)}")
-    dataset_test = IMUDataset(args.data_config, augment_round=0, is_train=False)
+    dataset_test = IMUDataset(args.data_config, is_train=False)
     print(f"test dataset size: {len(dataset_test)}")
 
     # Split the dataset into training, validation, and test sets (80-10-10)
