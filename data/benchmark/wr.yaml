@@ -3,12 +3,11 @@ TRAIN:
     LOC:
         - 'wrist'
     META:
-        - '/data/wjdu/benchmark/data/shoaib_90_TRAIN.json'
         - '/data/wjdu/benchmark/data/realworld_90_TRAIN.json'
 
 TEST:
     LOC:
         - 'wrist'
     META:
-        - '/data/wjdu/benchmark/data/domino_10_TEST.json'
         - '/data/wjdu/benchmark/data/pamap2_10_TEST.json'
+        - '/data/wjdu/benchmark/data/shoaib_10_TEST.json'
