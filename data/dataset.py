@@ -9,7 +9,7 @@ from torch.utils.data import Dataset
 from scipy.stats import special_ortho_group
 
 class IMUDataset(Dataset):
-    DEFAULT_LOC = ["chest", "upperarm", "wrist", "waist", "hip", "thigh"]
+    DEFAULT_LOC = ["chest", "upperarm", "wrist", "waist", "thigh"]
     
     def __init__(self, config, augment_round=1, is_train=True):
         data_list = []
