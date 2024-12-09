@@ -5,9 +5,10 @@ TRAIN:
         - 'upperarm'
     META:
         - '/data/wjdu/benchmark/data/realworld_90_TRAIN.json'
+        - '/data/wjdu/benchmark/data/shoaib_90_TRAIN.json'
 
 TEST:
     LOC:
-        - 'upperarm'
+        - 'wrist'
     META:
-        - '/data/wjdu/benchmark/data/shoaib_10_TEST.json'
+        - '/data/wjdu/benchmark/data/hhar_10_TEST.json'

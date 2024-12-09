@@ -1,0 +1,24 @@
+NAME: 'multi'
+TRAIN:
+    LOC:
+        - "chest"
+        - "upperarm"
+        - "wrist"
+        - "waist"
+        - "hip"
+        - "thigh"
+    META:
+        - '/data/wjdu/benchmark/data/shoaib_90_TRAIN.json'
+        - '/data/wjdu/benchmark/data/realworld_90_TRAIN.json'
+
+TEST:
+    LOC:
+        - "chest"
+        - "upperarm"
+        - "wrist"
+        - "waist"
+        - "hip"
+        - "thigh"
+    META:
+        - '/data/wjdu/benchmark/data/shoaib_10_TEST.json'
+        - '/data/wjdu/benchmark/data/realworld_10_TEST.json'

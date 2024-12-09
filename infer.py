@@ -166,20 +166,6 @@ def eval(eval_file):
     return acc, 
 
 def infer(config_path, model):
-    data_list = []
-    print("Dataset:")
-    
-    config = yaml.safe_load(open(config_path))['TEST']
-    test_paths = config['META']
-    loc = config.get('LOC', default_loc)
-    for i, meta_path in enumerate(test_paths):
-        print(f"\t{i}. {meta_path.split('/')[-1]}")
-        df = pd.read_json(meta_path, orient='records')
-        meta_l = df[df['location'].isin(loc)].to_dict('records')
-        print(f"{meta_path}: len {len(meta_l)}")
-        data_list.append(meta_l)
-        del df
-    
     # mapping = {l: i for i, l in enumerate(labels)}
     ['downstairs', 'jog', 'lie', 'sit', 'stand', 'upstairs', 'walk']
     mapping = {
@@ -196,7 +182,16 @@ def infer(config_path, model):
 
     acc_total = {}
     num_total = {}
-    for data_item, data_path in zip(data_list, test_paths):
+
+    config = yaml.safe_load(open(config_path))['TEST']
+    test_paths = config['META']
+    loc = config.get('LOC', default_loc)
+    for i, data_path in enumerate(test_paths):
+        print(f"\t{i}. {data_path.split('/')[-1]}")
+        df = pd.read_json(data_path, orient='records')
+        data_item = df[df['location'].isin(loc)].to_dict('records')
+        print(f"{data_path}: len {len(data_item)}")
+
         predictions = []
         correct_pred = 0
         
