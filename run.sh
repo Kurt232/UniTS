@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-MODEL=UniTS_HEAD
+MODEL=LIMU_HEAD
 
 bash batch_train.sh "$MODEL" 0 "" 3000 &
 bash batch_train.sh "$MODEL" 1 "_1" 3100 &

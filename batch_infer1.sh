@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e  # Exit immediately if a command exits with a non-zero status
 
-MODEL=UniTS_HEAD
+MODEL=LIMU_HEAD
 MARKS=("" "_1" "_2" "_3")
 
 for MARK in "${MARKS[@]}"; do

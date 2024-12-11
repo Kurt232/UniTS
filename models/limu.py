@@ -438,21 +438,22 @@ from dataclasses import dataclass, field
 
 @dataclass
 class ModelArgs:
+    # unihar settings
     feature_num: int = 6
-    hidden: int = 72
-    hidden_ff: int = 144
-    n_layers: int = 4
+    hidden: int = 36
+    hidden_ff: int = 72
+    n_layers: int = 1
     n_heads: int = 4
     seq_len: int = 100
     emb_norm: bool = True
     num_class: int = 7
 
-    num_rnn: int = 2
-    num_layers: list = field(default_factory=lambda: [2, 1])
-    rnn_io: list = field(default_factory=lambda: [[6, 20], [20, 10]])
-    rnn_bidirection: list = field(default_factory=lambda: [False, False])
+    num_rnn: int = 1
+    num_layers: list = field(default_factory=lambda: [1])
+    rnn_io: list = field(default_factory=lambda: [[6, 10]])
+    rnn_bidirection: list = field(default_factory=lambda: [True])
     num_linear: int = 1
-    linear_io: list = field(default_factory=lambda: [[10, 7]])
+    linear_io: list = field(default_factory=lambda: [[20, 7]])
     activ: bool = False
     dropout: bool = True
 
