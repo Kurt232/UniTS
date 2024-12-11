@@ -635,7 +635,7 @@ class UniTS(nn.Module):
     def __init__(self, 
                  enc_in, num_class, 
                  prompt_num=10,
-                 d_model=128, stride=16, 
+                 d_model=256, stride=16, 
                  patch_len=16, dropout=0.1, 
                  e_layers=3, n_heads=8
                 ):
@@ -661,7 +661,6 @@ class UniTS(nn.Module):
         self.patch_embeddings = PatchEmbedding(
             d_model, patch_len, stride, stride, dropout)
         self.position_embedding = LearnablePositionalEmbedding(d_model)
-        self.prompt2forecat = DynamicLinear(128, 128, fixed_in=prompt_num)
 
         # basic blocks
         self.block_num = e_layers
