@@ -1,0 +1,16 @@
+NAME: 'duration'
+TEST:
+    LOC: 
+        - 'thigh'
+        - 'thigh'
+        - 'thigh'
+        - 'thigh'
+        - 'thigh'
+        - 'thigh'
+    META:
+        - '/data/wjdu/benchmark/data_2/50_1/shoaib_10_TEST.json'
+        - '/data/wjdu/benchmark/data_2/50_1/motion_10_TEST.json'
+        - '/data/wjdu/benchmark/data_2/50_2/shoaib_10_TEST.json'
+        - '/data/wjdu/benchmark/data_2/50_2/motion_10_TEST.json'
+        - '/data/wjdu/benchmark/data_2/50_4/shoaib_10_TEST.json'
+        - '/data/wjdu/benchmark/data_2/50_4/motion_10_TEST.json'

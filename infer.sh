@@ -3,10 +3,10 @@ set -e  # Exit immediately if a command exits with a non-zero status
 
 ROOT="/data/wjdu/benchmark"
 MODEL="UniTS_HEAD"
-MARK=""
-
+MARK="_1"
+CONFIGS="data/train/loc"
 # Count total number of tasks
-TASK_LEN=$(ls data/benchmark/*.yaml | wc -l)
+TASK_LEN=$(ls $CONFIGS/*.yaml | wc -l)
 
 # Initialize loop index
 CURRENT_IDX=0
@@ -16,12 +16,12 @@ if [ -d "${ROOT}/result/${MODEL}${MARK}" ]; then
 fi
 
 # read all configs from `data/benchmark/`
-for DATA_CONFIG in data/benchmark/*.yaml; do
+for DATA_CONFIG in $CONFIGS/*.yaml; do
     # Increment loop index
     CURRENT_IDX=$((CURRENT_IDX + 1))
 
     DATA_CONFIG=${DATA_CONFIG##*/}
-    DATA_CONFIG="data/benchmark/$DATA_CONFIG"
+    DATA_CONFIG="${CONFIGS}/${DATA_CONFIG}"
     FLAG=$(basename ${DATA_CONFIG%.yaml})
     TRAIN_DIR="${ROOT}/output/${MODEL}${MARK}/${MODEL}_${FLAG}/checkpoint-10.pth"
     OUTPUT_DIR="${ROOT}/result/${MODEL}${MARK}/${MODEL}_${FLAG}"

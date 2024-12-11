@@ -1,0 +1,13 @@
+NAME: 'wrist-wrist'
+TRAIN:
+    LOC:
+        - 'wrist'
+    META:
+        - '/data/wjdu/benchmark/data_2/50_4/realworld_90_TRAIN.json'
+
+TEST:
+    LOC:
+        - 'wrist'
+    META:
+        - '/data/wjdu/benchmark/data_2/50_4/pamap2_10_TEST.json'
+        - '/data/wjdu/benchmark/data_2/50_4/shoaib_10_TEST.json'

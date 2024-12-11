@@ -16,13 +16,13 @@ def get_args_parser():
     # Model parameters
     parser.add_argument('-l', '--load_path', default=None, type=str,
                         help='path to load pretrained model')
-
     # Dataset parameters
     parser.add_argument('-d', '--data_config', nargs='+', default=None,
-                        help='dataset config path')
-
-    parser.add_argument('-o', '--output_dir', default=None,
+                        type=str, help='dataset config path')
+    parser.add_argument('-o', '--output_dir', default=None, type=str,
                         help='path where to save, empty for no saving')
+    parser.add_argument('-t', '--target', default=None, type=str,
+                        help='window size for input')
 
     return parser
 
@@ -34,8 +34,11 @@ save_path = args.output_dir
 
 num_class = 7
 config_paths = args.data_config
-
-default_loc = ['chest', 'upperarm', 'wrist', 'waist', 'thigh']
+target = args.target
+assert target is not None
+temp = target.split('_')
+assert len(temp) == 2
+win_size = int(temp[0])*int(temp[1])
 
 os.makedirs(save_path, exist_ok=True)
 
@@ -185,22 +188,29 @@ def infer(config_path, model):
 
     config = yaml.safe_load(open(config_path))['TEST']
     test_paths = config['META']
-    loc = config.get('LOC', default_loc)
+    locations = config['LOC']
+    assert len(test_paths) == len(locations)
     for i, data_path in enumerate(test_paths):
+        loc = locations[i]
         print(f"\t{i}. {data_path.split('/')[-1]}")
         df = pd.read_json(data_path, orient='records')
-        data_item = df[df['location'].isin(loc)].to_dict('records')
+        data_item = df[df['location'] == loc].to_dict('records')
         print(f"{data_path}: len {len(data_item)}")
+
+        if "shoaib" in data_path and loc == 'hip':
+            loc = 'waist'
 
         predictions = []
         correct_pred = 0
         
         with torch.no_grad():
             for data in tqdm(data_item, desc=f"Testing ..."):
-                imu_input = torch.tensor(data['imu_input'], dtype=torch.float32)
+                imu_input = torch.tensor(data['imu_input'], dtype=torch.float32).unsqueeze(0)
+                if imu_input.shape[2] != win_size:
+                    # imu_input: (1, 40, 6) resampling to (1, 100, 6)
+                    imu_input = torch.nn.functional.interpolate(imu_input.permute(0, 2, 1), size=100, mode='linear', align_corners=True).permute(0, 2, 1)
                 label = mapping[data['output']] # an integer
-
-                imu_input = imu_input.unsqueeze(0).to(device, non_blocking=True)
+                imu_input = imu_input.to(device, non_blocking=True)
                 output = model(imu_input)
 
                 # Calculate accuracy
@@ -209,8 +219,8 @@ def infer(config_path, model):
                     correct_pred += 1
 
                 predictions.append({'pred': _mapping[pred_index.item()], 'ref': data['output'], 'data_id': data['data_id']})
-
-        result_file = load_path.split('/')[-2] + '_' + data_path.split('/')[-1]
+        temp = data_path.split('/')
+        result_file = load_path.split('/')[-2] + f'_{target}__{loc}_{temp[-2]}_' + temp[-1]
         prediction_file = os.path.join(save_path, result_file)
         json.dump(predictions, open(prediction_file, 'w'), indent=2)
 

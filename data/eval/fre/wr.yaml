@@ -1,0 +1,14 @@
+NAME: 'duration'
+TEST:
+    LOC: 
+        - 'wrist'
+        - 'wrist'
+        - 'wrist'
+        - 'wrist'
+        - 'wrist'
+    META:
+        - '/data/wjdu/benchmark/data_2/20_2/shoaib_10_TEST.json'
+        - '/data/wjdu/benchmark/data_2/20_2/pamap2_10_TEST.json'
+        - '/data/wjdu/benchmark/data_2/50_2/shoaib_10_TEST.json'
+        - '/data/wjdu/benchmark/data_2/50_2/pamap2_10_TEST.json'
+        - '/data/wjdu/benchmark/data_2/100_2/pamap2_10_TEST.json'

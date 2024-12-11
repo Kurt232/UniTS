@@ -8,8 +8,8 @@ TRAIN:
         - "hip"
         - "thigh"
     META:
-        - '/data/wjdu/benchmark/data/shoaib_90_TRAIN.json'
-        - '/data/wjdu/benchmark/data/realworld_90_TRAIN.json'
+        - '/data/wjdu/benchmark/data_2/shoaib_90_TRAIN.json'
+        - '/data/wjdu/benchmark/data_2/realworld_90_TRAIN.json'
 
 TEST:
     LOC:
@@ -20,5 +20,5 @@ TEST:
         - "hip"
         - "thigh"
     META:
-        - '/data/wjdu/benchmark/data/shoaib_10_TEST.json'
-        - '/data/wjdu/benchmark/data/realworld_10_TEST.json'
+        - '/data/wjdu/benchmark/data_2/shoaib_10_TEST.json'
+        - '/data/wjdu/benchmark/data_2/realworld_10_TEST.json'
