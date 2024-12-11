@@ -635,8 +635,8 @@ class UniTS(nn.Module):
     def __init__(self, 
                  enc_in, num_class, 
                  prompt_num=10,
-                 d_model=256, stride=16, 
-                 patch_len=16, dropout=0.1, 
+                 d_model=256, stride=8, 
+                 patch_len=8, dropout=0.1, 
                  e_layers=3, n_heads=8
                 ):
         super().__init__()
@@ -673,20 +673,6 @@ class UniTS(nn.Module):
         self.head = CLSHead(d_model, head_dropout=dropout)
 
     def tokenize(self, x, mask=None):
-        # Normalization from Non-stationary Transformer
-        means = x.mean(1, keepdim=True).detach()
-        x = x - means
-        if mask is not None:
-            x = x.masked_fill(mask == 0, 0)
-            stdev = torch.sqrt(torch.sum(x * x, dim=1) /
-                               torch.sum(mask == 1, dim=1) + 1e-5)
-            stdev = stdev.unsqueeze(dim=1)
-        else:
-            stdev = torch.sqrt(
-                torch.var(x, dim=1, keepdim=True, unbiased=False) + 1e-5)
-        # for classification, the input is normalized
-        x = x + means
-
         x = x.permute(0, 2, 1)
         remainder = x.shape[2] % self.patch_len
         if remainder != 0:
@@ -695,7 +681,7 @@ class UniTS(nn.Module):
         else:
             padding = 0
         x, n_vars = self.patch_embeddings(x)
-        return x, means, stdev, n_vars, padding
+        return x, n_vars, padding
 
     def prepare_prompt(self, x, n_vars, prefix_prompt, task_prompt):
         x = torch.reshape(
@@ -720,7 +706,7 @@ class UniTS(nn.Module):
         prefix_prompt = self.prompt_tokens
         task_prompt = self.cls_tokens
         category_token = self.category_tokens
-        x, means, stdev, n_vars, _ = self.tokenize(x)
+        x, n_vars, _ = self.tokenize(x)
 
         seq_len = x.shape[-2]
 
