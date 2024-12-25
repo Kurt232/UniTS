@@ -208,8 +208,10 @@ def infer(config_path, model):
                 imu_input = torch.tensor(data['imu_input'], dtype=torch.float32).unsqueeze(0)
                 if imu_input.shape[2] != win_size:
                     # imu_input: (1, 40, 6) resampling to (1, 100, 6)
-                    imu_input = torch.nn.functional.interpolate(imu_input.permute(0, 2, 1), size=100, mode='linear', align_corners=True).permute(0, 2, 1)
-                label = mapping[data['output']] # an integer
+                    imu_input = torch.nn.functional.interpolate(imu_input.permute(0, 2, 1), size=win_size, mode='linear', align_corners=True).permute(0, 2, 1)
+                _label = data['output'].split(', ')[-1].strip()
+                label = mapping[_label] # an integer
+                
                 imu_input = imu_input.to(device, non_blocking=True)
                 output = model(imu_input)
 
@@ -218,7 +220,7 @@ def infer(config_path, model):
                 if pred_index.item() == label:
                     correct_pred += 1
 
-                predictions.append({'pred': _mapping[pred_index.item()], 'ref': data['output'], 'data_id': data['data_id']})
+                predictions.append({'pred': _mapping[pred_index.item()], 'ref': _label, 'data_id': data['data_id']})
         temp = data_path.split('/')
         result_file = load_path.split('/')[-2] + f'_{target}__{loc}_{temp[-2]}_' + temp[-1]
         prediction_file = os.path.join(save_path, result_file)

@@ -198,7 +198,8 @@ def infer(config_path, model):
         with torch.no_grad():
             for data in tqdm(data_item, desc=f"Testing ..."):
                 imu_input = torch.tensor(data['imu_input'], dtype=torch.float32)
-                label = mapping[data['output']] # an integer
+                _label = data['output'].split(', ')[-1].strip()
+                label = mapping[_label] # an integer
 
                 imu_input = imu_input.unsqueeze(0).to(device, non_blocking=True)
                 output = model(imu_input)
@@ -208,7 +209,7 @@ def infer(config_path, model):
                 if pred_index.item() == label:
                     correct_pred += 1
 
-                predictions.append({'pred': _mapping[pred_index.item()], 'ref': data['output'], 'data_id': data['data_id']})
+                predictions.append({'pred': _mapping[pred_index.item()], 'ref': _label, 'data_id': data['data_id']})
 
         result_file = load_path.split('/')[-2] + '_' + data_path.split('/')[-1]
         prediction_file = os.path.join(save_path, result_file)

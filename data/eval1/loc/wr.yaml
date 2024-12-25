@@ -1,15 +1,15 @@
 TEST:
     LOC:
-        - 'wrist'
+        # - 'wrist'
         - 'wrist'
         - 'upperarm'
         - 'hip'
         - 'thigh'
-        - 'chest'
+        # - 'chest'
     META:
-        - '/data/wjdu/benchmark/data_4/50_2/pamap2_10_TEST.json'
-        - '/data/wjdu/benchmark/data_4/50_2/shoaib_10_TEST.json'
-        - '/data/wjdu/benchmark/data_4/50_2/shoaib_10_TEST.json'
-        - '/data/wjdu/benchmark/data_4/50_2/shoaib_10_TEST.json'
-        - '/data/wjdu/benchmark/data_4/50_2/shoaib_10_TEST.json'
-        - '/data/wjdu/benchmark/data_4/50_2/pamap2_10_TEST.json'
+        # - '/data/wjdu/benchmark/data_4_2/50_2/pamap2_10_TEST.json'
+        - '/data/wjdu/benchmark/data_4_2/50_2/shoaib_10_TEST.json'
+        - '/data/wjdu/benchmark/data_4_2/50_2/shoaib_10_TEST.json'
+        - '/data/wjdu/benchmark/data_4_2/50_2/shoaib_10_TEST.json'
+        - '/data/wjdu/benchmark/data_4_2/50_2/shoaib_10_TEST.json'
+        # - '/data/wjdu/benchmark/data_4_2/50_2/pamap2_10_TEST.json'

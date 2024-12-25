@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e  # Exit immediately if a command exits with a non-zero status
 
-GPUS="0,1,2,3,4,5,6,7"
+GPUS="2,3,4,5,6,7"
 
 ROOT="/data/wjdu/benchmark1"
 MODEL=$1
@@ -37,7 +37,7 @@ for CONFIG in $CONFIGS/*; do
         CURRENT_IDX=$((CURRENT_IDX + 1))
 
         FLAG=$(basename ${DATA_CONFIG%.yaml})
-        TRAIN_DIR="${ROOT}/output/${CONFIG_NAME}/${MODEL}${MARK}/${MODEL}_${FLAG}"
+        TRAIN_DIR="${ROOT}/output/${MODEL}${MARK}/${CONFIG_NAME}_${FLAG}"
         OUTPUT_DIR="${ROOT}/result/${CONFIG_NAME}/${MODEL}${MARK}/${MODEL}_${FLAG}"
         
         # if exists TRAIN_DIR, skip
@@ -51,16 +51,11 @@ for CONFIG in $CONFIGS/*; do
         echo "Output directory: $TRAIN_DIR"
 
         CUDA_VISIBLE_DEVICES="$GPUS" torchrun --nproc_per_node=$NNODE --master_port=$MASTER_PORT \
-        train.py --data_config "$DATA_CONFIG" --load_path "$LOAD_PATH" --batch_size 512 \
-        --epochs 20 --warmup_epochs 10 --blr 1e-4 --min_lr 1e-6 --weight_decay 5e-6 \
+        train.py --data_config "$DATA_CONFIG" --load_path "$LOAD_PATH" --batch_size 1024 \
+        --epochs 40 --warmup_epochs 10 --blr 1e-4 --min_lr 1e-6 --weight_decay 5e-6 \
         --output_dir "$TRAIN_DIR" \
         --seed 42 \
         --setting_id $SETTING_ID \
-        > "$TRAIN_DIR/output.log"
-
-        # mkdir -p "$OUTPUT_DIR"
-
-        # python infer.py -l "$TRAIN_DIR" -d "$DATA_CONFIG" -o "$OUTPUT_DIR" >> "${OUTPUT_DIR}/output.log"
-        # python ${ROOT}/eval.py "$OUTPUT_DIR" >> "${OUTPUT_DIR}/output.log"
+        > "$TRAIN_DIR"/output.log
     done
 done
